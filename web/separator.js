@@ -1,6 +1,6 @@
 // HTDemucs ONNX tensor layout and overlap-add follow the demucs-onnx browser guide.
 // https://stemsplit.github.io/demucs-onnx/browser/
-const runtime = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
+const runtime = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/";
 const models = {
   4: "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/d54ed9eb60e258ea82131c6ee14578628816456a/htdemucs_fp16weights.onnx",
   6: "https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/49df9b6989cf2150840ea65b0bef77a2e471b678/htdemucs_6s_fp16weights.onnx",
@@ -23,15 +23,20 @@ self.onmessage = async ({ data: { stereo, mode } }) => {
       const ort = await import(runtime + "ort.wasm.min.mjs");
       ort.env.wasm.wasmPaths = runtime;
       ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(navigator.hardwareConcurrency || 2, 4) : 1;
+      // Graph optimization can exhaust the WASM heap while loading HTDemucs.
       session = await ort.InferenceSession.create(models[mode], {
-        executionProviders: ["wasm"], graphOptimizationLevel: "all",
+        executionProviders: ["wasm"],
+        graphOptimizationLevel: "disabled",
+        enableCpuMemArena: false,
+        enableMemPattern: false,
       });
       loadedMode = mode;
     }
+    postMessage({ phase: "processing" });
     const tracks = await separate(stereo, Number(mode));
     postMessage({ phase: "done", tracks }, tracks.map(({ wav }) => wav));
   } catch (error) {
-    postMessage({ phase: "error", message: error.message });
+    postMessage({ phase: "error", message: error instanceof Error ? error.message : String(error) });
   }
 };
 

@@ -145,6 +145,8 @@ function handleWorker({ data }) {
   if (!job) return;
   if (data.phase === "model") {
     status.textContent = "Đang tải model. Lần đầu có thể mất vài phút…";
+  } else if (data.phase === "processing") {
+    status.textContent = "Đang tách các stem…";
   } else if (data.phase === "split") {
     progress.max = data.chunks;
     progress.value = data.done;
