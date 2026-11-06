@@ -3,73 +3,112 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Tách stem, đo tempo (BPM) và tìm tone nhạc trực tiếp trong trình duyệt với Akapella.">
-  <meta name="theme-color" content="#101412">
-  <title>Akapella — Tách stem âm thanh</title>
+  <meta name="description" content="Tách giọng hát, bass và trống, hoặc kiểm tra BPM và tone. Akapella xử lý file nhạc ngay trên thiết bị của bạn.">
+  <meta name="theme-color" content="#101310">
+  <title>Akapella Studio — Tách stem và phân tích nhạc</title>
+  <link rel="canonical" href="https://akapella.vercel.app/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="vi_VN">
+  <meta property="og:title" content="Akapella Studio — Tách stem và phân tích nhạc">
+  <meta property="og:description" content="Tách giọng, bass và trống, hoặc kiểm tra BPM và tone ngay trong trình duyệt.">
+  <meta property="og:url" content="https://akapella.vercel.app/">
+  <meta property="og:image" content="https://akapella.vercel.app/share.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Akapella Studio. Tách từng lớp, nghe từng track.">
   <link rel="icon" href="/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/studio.css">
   <script type="module" src="/studio.js"></script>
   <script type="module" src="/youtube.js"></script>
 </head>
 <body>
+  <a class="skip" href="#studio">Đến khu vực xử lý</a>
   <header class="shell masthead">
-    <a class="brand" href="/"><img src="/mark.svg" alt="" width="30" height="30"> Akapella</a>
-    <a class="repo" href="https://github.com/doandanh-zah/akapella">GitHub <span aria-hidden="true">↗</span></a>
+    <a class="brand" href="/" aria-label="Akapella, trang chủ">
+      <img src="/mark.svg" alt="" width="34" height="34">
+      <span>Akapella <small>STUDIO</small></span>
+    </a>
+    <nav aria-label="Điều hướng chính">
+      <a href="#studio">Studio</a>
+      <a href="#youtube">YouTube <span aria-hidden="true">→</span> MP3</a>
+      <a class="repo" href="https://github.com/doandanh-zah/akapella">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
   </header>
   <main class="shell">
     <section class="hero" aria-labelledby="headline">
-      <div>
-        <p class="eyebrow">STUDIO / TÁCH STEM</p>
-        <h1 id="headline">Tách riêng từng lớp âm thanh.</h1>
-        <p class="intro">Nghe riêng giọng hát, bass và trống. Xuất từng track WAV hoặc kiểm tra BPM và tone của bản nhạc.</p>
+      <div class="hero-copy">
+        <p class="eyebrow" data-hero><span class="signal-dot" aria-hidden="true"></span> Studio âm thanh</p>
+        <h1 id="headline" data-hero>Tách từng lớp,<br><em>nghe từng track.</em></h1>
+        <p class="intro" data-hero>Tách giọng, bass và trống để nghe riêng, hoặc tìm BPM và tone của bản nhạc. File được xử lý ngay trên thiết bị của bạn.</p>
       </div>
-      <figure class="signal" aria-hidden="true">
-        <svg viewBox="0 0 264 100" fill="none">
-          <path d="M0 50h264" stroke="#36423a"/>
-          <path d="M4 46v8m8-12v16m8-12v8m8-19v30m8-19v8m8-27v46m8-39v32m8-54v76m8-55v34m8-43v52m8-39v26m8-19v12m8-30v48m8-34v20m8-35v50m8-34v18m8-46v74m8-55v36m8-59v82m8-52v22m8-25v28m8-20v12m8-41v70m8-45v20m8-28v36m8-28v20m8-38v56m8-44v32m8-25v18m8-13v8m8-17v26m8-19v12m8-10v8" stroke="currentColor" stroke-width="3"/>
+      <figure class="signal">
+        <div class="signal-head"><span>01 / DẠNG SÓNG</span><span>FILE MẪU</span></div>
+        <svg viewBox="0 0 540 144" preserveAspectRatio="none" fill="none" aria-hidden="true">
+          <path d="M0 36H540M0 72H540M0 108H540M135 0V144M270 0V144M405 0V144" class="wave-grid"/>
+          <path d="M0 72 L2.0 113.4 L6.1 35.8 L10.2 107.8 L14.3 35.5 L18.4 108.3 L22.5 29.8 L26.6 106.9 L30.7 36.7 L34.8 106.4 L38.9 38.4 L43.0 104.8 L47.0 11.7 L51.1 101.6 L55.2 40.4 L59.3 102.8 L63.4 37.7 L67.5 125.3 L71.6 36.0 L75.7 106.1 L79.8 35.6 L83.9 107.0 L88.0 37.8 L92.0 114.6 L96.1 36.5 L100.2 106.0 L104.3 36.4 L108.4 106.9 L112.5 19.3 L116.6 108.8 L120.7 35.3 L124.8 107.7 L128.9 35.7 L133.0 106.5 L137.0 24.7 L141.1 104.9 L145.2 39.2 L149.3 101.8 L153.4 42.0 L157.5 126.6 L161.6 39.0 L165.7 106.6 L169.8 37.6 L173.9 107.9 L178.0 36.0 L182.0 113.5 L186.1 39.9 L190.2 102.1 L194.3 40.9 L198.4 104.9 L202.5 14.3 L206.6 106.8 L210.7 35.8 L214.8 108.6 L218.9 37.0 L223.0 108.1 L227.0 16.9 L231.1 107.5 L235.2 35.9 L239.3 108.5 L243.4 35.7 L247.5 128.3 L251.6 35.6 L255.7 105.8 L259.8 38.7 L263.9 103.3 L268.0 47.5 L272.0 111.1 L276.1 35.9 L280.2 108.3 L284.3 35.3 L288.4 108.4 L292.5 20.0 L296.6 108.8 L300.7 39.3 L304.8 102.4 L308.9 40.0 L313.0 106.3 L317.0 10.5 L321.1 107.9 L325.2 35.5 L329.3 108.3 L333.4 37.0 L337.5 127.9 L341.6 34.6 L345.7 108.9 L349.8 35.8 L353.9 108.2 L358.0 36.1 L362.0 109.1 L366.1 38.0 L370.2 105.4 L374.3 35.8 L378.4 107.2 L382.5 16.2 L386.6 107.4 L390.7 35.5 L394.8 107.8 L398.9 36.2 L403.0 107.0 L407.0 24.9 L411.1 106.3 L415.2 35.9 L419.3 106.6 L423.4 35.5 L427.5 136.0 L431.6 35.9 L435.7 106.1 L439.8 36.9 L443.9 104.5 L448.0 40.7 L452.0 113.0 L456.1 41.6 L460.2 102.4 L464.3 39.8 L468.4 105.2 L472.5 19.1 L476.6 107.0 L480.7 35.8 L484.8 108.3 L488.9 35.4 L493.0 108.4 L497.0 16.4 L501.1 107.6 L505.2 36.5 L509.3 107.3 L513.4 37.3 L517.5 117.3 L521.6 36.8 L525.7 108.8 L529.8 35.8 L533.9 108.0 L538.0 36.7 L540 72" class="wave" data-wave vector-effect="non-scaling-stroke"/>
         </svg>
-        <figcaption><span>HTDEMUCS</span><span>44,1 kHz / WAV</span></figcaption>
+        <figcaption><span>00:00</span><span>00:06</span><span>00:12</span></figcaption>
       </figure>
     </section>
 
-    <div class="workspace">
-      <section class="panel" aria-labelledby="source-heading">
-        <div class="section-heading"><span>01</span><h2 id="source-heading">Chọn nguồn</h2></div>
+    <div class="workspace" id="studio">
+      <section class="panel source-panel" aria-labelledby="source-heading">
+        <div class="section-heading"><span class="step">01</span><h2 id="source-heading">Xử lý âm thanh</h2></div>
         <form id="split-form">
           <fieldset id="controls">
-            <legend class="sr-only">Nguồn và chế độ tách</legend>
+            <legend class="sr-only">Nguồn và chế độ</legend>
             <div class="drop" id="drop">
-              <input id="source" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.opus,.aac" aria-describedby="formats">
+              <input id="source" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.opus,.aac" aria-labelledby="source-label" aria-describedby="formats">
               <label for="source">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>
-                <strong id="source-name">Chọn hoặc thả file nhạc</strong>
-                <span id="formats">MP3, WAV, FLAC, M4A · Tối đa 50 MB và 5 phút</span>
+                <span class="upload-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>
+                </span>
+                <span class="drop-copy">
+                  <span class="sr-only" id="source-label">Chọn file nhạc</span>
+                  <strong id="source-name">Chọn hoặc thả file nhạc</strong>
+                  <span id="formats">MP3, WAV, FLAC, M4A · Tối đa 50 MB và 5 phút</span>
+                </span>
               </label>
             </div>
-            <button class="text-button" id="sample" type="button">Dùng file mẫu 12 giây</button>
-            <label class="select-label" for="mode">Chế độ</label>
-            <select id="mode" aria-describedby="model-note">
-              <option value="4">4 stem · Giọng, bass, trống, nhạc khác</option>
-              <option value="6">6 stem · Thêm guitar và piano</option>
-              <option value="analysis">Tempo &amp; tone · BPM và giọng nhạc</option>
-            </select>
+            <button class="text-button" id="sample" type="button"><span aria-hidden="true">▷</span> Dùng file mẫu 12 giây</button>
+            <fieldset id="mode-group" class="mode-group" aria-describedby="model-note">
+              <legend>Chế độ xử lý</legend>
+              <div class="mode-options">
+                <div>
+                  <input id="mode-4" type="radio" name="mode" value="4" checked>
+                  <label for="mode-4"><strong>4 stem</strong><span>Giọng, bass, trống và nhạc khác</span></label>
+                </div>
+                <div>
+                  <input id="mode-6" type="radio" name="mode" value="6">
+                  <label for="mode-6"><strong>6 stem</strong><span>Thêm guitar và piano</span></label>
+                </div>
+                <div>
+                  <input id="mode-analysis" type="radio" name="mode" value="analysis">
+                  <label for="mode-analysis"><strong>Tempo &amp; tone</strong><span>Ước tính BPM và giọng nhạc</span></label>
+                </div>
+              </div>
+            </fieldset>
             <p id="model-note" class="muted">Model khoảng 166 MB. Âm thanh được xử lý trên thiết bị của bạn.</p>
           </fieldset>
           <div class="actions">
-            <button type="submit" id="run" disabled>Tách âm thanh <span aria-hidden="true">↗</span></button>
+            <button class="primary" type="submit" id="run" disabled><span id="run-label">Tách âm thanh</span><span aria-hidden="true">↗</span></button>
             <button type="button" class="text-button" id="cancel" hidden>Hủy</button>
           </div>
         </form>
         <div id="job" role="status" aria-live="polite">
           <p id="status"></p>
-          <progress id="progress" aria-label="Tiến độ tách" hidden></progress>
+          <progress id="progress" aria-label="Tiến độ xử lý" hidden></progress>
         </div>
-        <p id="error" role="alert" hidden></p>
+        <p id="error" class="error" role="alert" hidden></p>
       </section>
 
       <section class="panel results-panel" aria-labelledby="results-heading">
-        <div class="section-heading"><span>02</span><h2 id="results-heading">Kết quả</h2></div>
-        <p id="empty" class="empty">Các track sẽ xuất hiện ở đây sau khi tách. Bạn có thể nghe thử hoặc tải từng file WAV.</p>
+        <div class="section-heading"><span class="step">02</span><h2 id="results-heading">Kết quả</h2><span class="result-format" id="result-format">WAV / 44,1 kHz</span></div>
+        <div id="empty" class="empty">
+          <svg width="58" height="38" viewBox="0 0 58 38" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 16v6m9-12v18m9-26v34m9-24v14m9-20v26m9-19v12m9-9v6"/></svg>
+          <p id="empty-title">Chưa có track</p>
+          <p id="empty-copy">Chọn file và bắt đầu tách để nghe thử hoặc tải từng track WAV.</p>
+        </div>
         <ul id="results" class="tracks" hidden></ul>
         <div id="analysis" hidden>
           <dl class="metrics">
@@ -81,28 +120,30 @@
       </section>
     </div>
 
-    <section class="panel youtube" aria-labelledby="youtube-heading" id="youtube">
-      <div class="section-heading"><span>03</span><h2 id="youtube-heading">YouTube → MP3</h2></div>
-      <form id="youtube-form">
-        <label for="youtube-url">Link video YouTube</label>
-        <div class="youtube-controls">
-          <input id="youtube-url" name="url" type="url" required maxlength="2048" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtube-help">
-          <button id="youtube-submit" type="submit">Mở trên máy <span aria-hidden="true">↗</span></button>
-        </div>
-        <p class="muted" id="youtube-help">Chạy <code>python serve.py</code> trên máy trước, rồi mở link tại đó để tải MP3. <a href="https://github.com/doandanh-zah/akapella#tải-mp3-từ-youtube">Hướng dẫn cài đặt</a></p>
-      </form>
-      <p id="youtube-status" role="status"></p>
-      <p id="youtube-error" role="alert" hidden></p>
-      <a id="youtube-download" hidden>Tải lại file MP3</a>
-    </section>
-    <aside class="local">
-      <div>
-        <h2>Tách stem từ link và tách riêng bộ trống</h2>
-        <p>Dùng bản CLI để tách stem từ YouTube, Facebook hoặc xuất riêng kick, snare, hi-hat và cymbal.</p>
+    <section class="youtube" aria-labelledby="youtube-heading" id="youtube">
+      <div class="youtube-intro">
+        <div class="section-heading"><span class="step">03</span><h2 id="youtube-heading">YouTube → MP3</h2></div>
+        <p>Tải âm thanh từ video công khai qua Akapella chạy trên máy.</p>
       </div>
-      <a href="https://github.com/doandanh-zah/akapella#chạy-trên-macos">Hướng dẫn CLI <span aria-hidden="true">↗</span></a>
-    </aside>
-    <noscript>Akapella cần JavaScript để tách âm thanh trong trình duyệt.</noscript>
+      <div class="youtube-body">
+        <form id="youtube-form">
+          <label for="youtube-url">Link video YouTube</label>
+          <div class="youtube-controls">
+            <input id="youtube-url" name="url" type="url" required maxlength="2048" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtube-help">
+            <button class="outline" id="youtube-submit" type="submit">Mở trên máy <span aria-hidden="true">↗</span></button>
+          </div>
+          <p class="muted" id="youtube-help">Chạy <code>python serve.py</code> trước khi mở. <a href="https://github.com/doandanh-zah/akapella#tải-mp3-từ-youtube">Hướng dẫn cài đặt</a></p>
+        </form>
+        <p id="youtube-status" role="status"></p>
+        <p id="youtube-error" class="error" role="alert" hidden></p>
+        <a id="youtube-download" hidden>Tải lại file MP3</a>
+      </div>
+    </section>
+    <noscript><p class="notice">Bật JavaScript để tách âm thanh, phân tích file và tải MP3.</p></noscript>
   </main>
+  <footer class="shell footer">
+    <p><strong>Akapella</strong><span>Tách stem từ link và tách riêng hi-hat, kick, snare bằng CLI.</span></p>
+    <a href="https://github.com/doandanh-zah/akapella#chạy-trên-macos">Hướng dẫn CLI <span aria-hidden="true">↗</span></a>
+  </footer>
 </body>
 </html>

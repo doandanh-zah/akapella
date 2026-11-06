@@ -1,10 +1,14 @@
+const motion = import("./motion.mjs").catch(() => null);
+
 const byId = (id) => document.getElementById(id);
 const form = byId("split-form");
 const controls = byId("controls");
 const source = byId("source");
-const mode = byId("mode");
+const mode = form.elements.namedItem("mode");
 const drop = byId("drop");
 const run = byId("run");
+const runLabel = byId("run-label");
+const jobStatus = byId("job");
 const cancel = byId("cancel");
 const status = byId("status");
 const progress = byId("progress");
@@ -26,6 +30,10 @@ let job;
 function showError(message = "") {
   errorText.textContent = message;
   errorText.hidden = !message;
+  if (!message) {
+    source.removeAttribute("aria-invalid");
+    source.setAttribute("aria-describedby", "formats");
+  }
 }
 
 function select(file) {
@@ -33,6 +41,7 @@ function select(file) {
   selection = file;
   clearResults();
   byId("source-name").textContent = file.name;
+  jobStatus.removeAttribute("data-state");
   status.textContent = "";
   showError();
   run.disabled = false;
@@ -53,28 +62,33 @@ byId("sample").addEventListener("click", () => {
   source.value = "";
   select({ name: "akapella-mau.mp3", sample: true });
 });
-mode.addEventListener("change", () => {
-  run.firstChild.textContent = isAnalysis() ? "Phân tích nhạc " : "Tách âm thanh ";
-  empty.textContent = isAnalysis()
-    ? "BPM và tone ước tính sẽ xuất hiện ở đây."
-    : "Các track sẽ xuất hiện ở đây sau khi tách. Bạn có thể nghe thử hoặc tải từng file WAV.";
-  if (isAnalysis()) {
-    byId("model-note").textContent = "Phân tích BPM và giọng nhạc ngay trên thiết bị của bạn.";
-    return;
-  }
+byId("mode-group").addEventListener("change", () => {
+  const analysing = isAnalysis();
+  runLabel.textContent = analysing ? "Phân tích nhạc" : "Tách âm thanh";
+  if (!empty.hidden) setResultFormat(analysing);
+  byId("empty-title").textContent = analysing ? "Chưa có phân tích" : "Chưa có track";
+  byId("empty-copy").textContent = analysing
+    ? "Chọn file và bắt đầu phân tích để xem BPM và tone ước tính."
+    : "Chọn file và bắt đầu tách để nghe thử hoặc tải từng track WAV.";
+  const hint = byId("model-note");
   const size = mode.value === "4" ? 166 : 136;
-  byId("model-note").textContent = `Model khoảng ${size} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
+  hint.textContent = analysing
+    ? "Phân tích BPM và giọng nhạc ngay trên thiết bị của bạn."
+    : `Model khoảng ${size} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
+  showError();
+  void motion.then((effects) => effects?.revealMode(hint));
 });
 
 function isAnalysis() {
   return mode.value === "analysis";
 }
 
-function finish(message) {
+function finish(message, state = "") {
   job = undefined;
   controls.disabled = false;
   run.disabled = !selection;
-  run.firstChild.textContent = isAnalysis() ? "Phân tích nhạc " : "Tách âm thanh ";
+  runLabel.textContent = isAnalysis() ? "Phân tích nhạc" : "Tách âm thanh";
+  jobStatus.dataset.state = state;
   cancel.hidden = true;
   progress.hidden = true;
   form.removeAttribute("aria-busy");
@@ -90,7 +104,7 @@ function stopWorker() {
 cancel.addEventListener("click", () => {
   job?.abort();
   stopWorker();
-  finish("Đã hủy. Bạn có thể thử lại với cùng file.");
+  finish("Đã hủy. Bạn có thể thử lại với cùng file.", "cancelled");
   run.focus();
 });
 
@@ -114,7 +128,13 @@ async function decode(file, signal) {
   return [audio.getChannelData(0).slice(), audio.getChannelData(audio.numberOfChannels - 1).slice()];
 }
 
+function setResultFormat(analysing) {
+  byId("result-format").textContent = analysing ? "BPM / TONE" : "WAV / 44,1 kHz";
+}
+
 function clearResults() {
+  setResultFormat(isAnalysis());
+  void motion.then((effects) => effects?.resetResultsMotion());
   results.replaceChildren();
   for (const url of urls) URL.revokeObjectURL(url);
   urls.clear();
@@ -131,6 +151,10 @@ function showResults(tracks) {
     urls.add(url);
     const item = document.createElement("li");
     item.className = "track";
+    const index = document.createElement("span");
+    index.className = "track-index";
+    index.setAttribute("aria-hidden", "true");
+    index.textContent = String(results.children.length + 1).padStart(2, "0");
     const title = document.createElement("strong");
     title.textContent = label;
     const link = document.createElement("a");
@@ -146,11 +170,12 @@ function showResults(tracks) {
     audio.addEventListener("play", () => {
       for (const other of results.querySelectorAll("audio")) if (other !== audio) other.pause();
     });
-    item.append(title, link, audio);
+    item.append(index, title, link, audio);
     results.append(item);
   }
   results.hidden = false;
   empty.hidden = true;
+  void motion.then((effects) => { if (!results.hidden) effects?.revealResults(results.children); });
 }
 
 function showAnalysis({ tempo, key }) {
@@ -164,6 +189,7 @@ function showAnalysis({ tempo, key }) {
     : "Cần đoạn có giai điệu hoặc hòa âm rõ.";
   analysis.hidden = false;
   empty.hidden = true;
+  void motion.then((effects) => { if (!analysis.hidden) effects?.revealResults(analysis.querySelectorAll(".metrics > div")); });
 }
 
 function failed(message) {
@@ -184,11 +210,11 @@ function handleWorker({ data }) {
     status.textContent = `Đã xử lý ${data.done}/${data.chunks} đoạn…`;
   } else if (data.phase === "done") {
     showResults(data.tracks);
-    finish(`Đã tạo ${data.tracks.length} track WAV.`);
+    finish(`Đã tạo ${data.tracks.length} track WAV.`, "done");
   } else if (data.phase === "analysis") {
     stopWorker();
     showAnalysis(data.metrics);
-    finish("Đã phân tích tempo và tone.");
+    finish("Đã phân tích tempo và tone.", "done");
   } else if (data.phase === "error") {
     console.error(data.message);
     failed(isAnalysis()
@@ -204,7 +230,8 @@ form.addEventListener("submit", async (event) => {
   job = current;
   controls.disabled = true;
   run.disabled = true;
-  run.firstChild.textContent = isAnalysis() ? "Đang phân tích… " : "Đang tách… ";
+  runLabel.textContent = isAnalysis() ? "Đang phân tích…" : "Đang tách…";
+  jobStatus.dataset.state = "busy";
   cancel.hidden = false;
   form.setAttribute("aria-busy", "true");
   status.textContent = "Đang đọc âm thanh…";
@@ -213,7 +240,13 @@ form.addEventListener("submit", async (event) => {
   showError();
 
   try {
-    const stereo = await decode(selection, current.signal);
+    const stereo = await decode(selection, current.signal).catch((error) => {
+      if (job === current && !selection.sample) {
+        source.setAttribute("aria-invalid", "true");
+        source.setAttribute("aria-describedby", "formats error");
+      }
+      throw error;
+    });
     if (job !== current) return;
     clearResults();
     const task = isAnalysis() ? "analyzer" : "separator";
