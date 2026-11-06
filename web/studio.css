@@ -163,6 +163,8 @@ h1 {
 .mode-options input:checked + label { border-color: var(--wave); background: var(--select); }
 .mode-options label span, .muted { color: var(--muted); font-size: .78rem; }
 .actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-block-start: .85rem; }
+#run[data-repeat]:not(:disabled) { color: var(--accent); background: var(--surface); border-color: var(--line-strong); }
+#run[data-repeat]:not(:disabled):hover { background: var(--select); border-color: var(--accent); }
 
 #job:empty { display: none; }
 #status:not(:empty), #youtube-status:not(:empty), #model-note:not(:empty), #cloud-access { margin-block-start: .65rem; }

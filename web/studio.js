@@ -107,8 +107,7 @@ function syncWorkspace() {
   byId("model-note").hidden = view === "tempo" || (!audio && useCloud);
   byId("cloud-access").hidden = !byId("pilot-code").required || view === "tempo" || !audio;
   byId("pilot-code").disabled = view === "tempo";
-  const alreadySplit = completedMode === (view === "vocals" ? 2 : Number(mode.value));
-  byId("split-actions").hidden = !job && (!audio || view === "tempo" || alreadySplit);
+  byId("split-actions").hidden = !job && (!audio || view === "tempo");
   run.hidden = view === "tempo";
   run.disabled = !audio || Boolean(job) || cloudUnavailable || !cloudReady;
   byId("upload-note").textContent = view === "tempo"
@@ -286,7 +285,9 @@ drop.addEventListener("drop", (event) => {
 });
 byId("sample").addEventListener("click", () => void select({ name: "akapella-mau.mp3", sample: true }));
 function setRunLabel() {
-  runLabel.textContent = view === "vocals" ? "Tách giọng" : "Tách âm thanh";
+  const repeat = completedMode === (view === "vocals" ? 2 : Number(mode.value));
+  run.toggleAttribute("data-repeat", repeat);
+  runLabel.textContent = repeat ? "Tách lại" : view === "vocals" ? "Tách giọng" : "Tách âm thanh";
 }
 
 function syncModeHint() {
@@ -301,7 +302,7 @@ function syncModeHint() {
 
 byId("mode-group").addEventListener("change", () => {
   syncWorkspace();
-  const hint = syncModeHint();
+  const hint = byId("model-note");
   void motion.then((effects) => effects?.revealMode(hint));
 });
 
