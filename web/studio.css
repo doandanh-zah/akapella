@@ -385,7 +385,7 @@ h2 { font: 400 clamp(1.45rem, 2.6vw, 2.1rem)/1.28 var(--display); letter-spacing
 @media (max-width: 900px) {
   :root { --header: 7.25rem; }
   .masthead { flex-wrap: wrap; row-gap: 0; align-content: center; padding-block: .4rem .55rem; }
-  .tools { order: 3; inline-size: 100%; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tools { order: 3; inline-size: 100%; margin: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
   .tools a { flex-direction: column; gap: 0; padding: .3rem .2rem; min-block-size: 44px; font-size: .74rem; justify-content: center; }
   .tool-no { font-size: .6rem; }
   .youtube { grid-template-columns: minmax(0, 1fr); align-content: end; }
