@@ -63,7 +63,9 @@ def split(session, stereo, count, directory, progress):
         path = directory / f"{name}.wav"
         sf.write(path, output[index].T, RATE, subtype="PCM_16")
         paths[name] = path
+        progress("export", index + 1, count + 1)
     path = directory / "instrumental.wav"
     sf.write(path, instrumental.T, RATE, subtype="PCM_16")
     paths["instrumental"] = path
+    progress("export", count + 1, count + 1)
     return paths

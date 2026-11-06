@@ -1,0 +1,10 @@
+{
+  "name": "akapella",
+  "private": true,
+  "dependencies": {
+    "@vercel/sandbox": "3.9.1"
+  },
+  "overrides": {
+    "@vercel/oidc": "4.0.7"
+  }
+}

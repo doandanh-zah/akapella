@@ -6,9 +6,11 @@ Tách một bản nhạc thành các stem WAV trên máy. Nguồn có thể là 
 
 [Mở Akapella](https://akapella.vercel.app/)
 
-Bản web trong thư mục `web/` tách file âm thanh thành 4 hoặc 6 stem và xuất WAV. Dùng dạng sóng để tua, chuyển giữa bản gốc và bản tách, hoặc dùng Solo và Mute để nghe từng lớp âm thanh. Web hỗ trợ file mono hoặc stereo, tối đa 50 MB và 5 phút. Model tải về trình duyệt và chạy trong Web Worker. Âm thanh của bạn được xử lý trên thiết bị. [HTDemucs trên trình duyệt](https://stemsplit.github.io/demucs-onnx/browser/)
+Bản web trong thư mục `web/` tách file âm thanh mono hoặc stereo thành 4 hoặc 6 stem và xuất WAV. Studio hỗ trợ file tối đa 50 MB và 5 phút. Dùng dạng sóng để tua, chuyển giữa bản gốc và bản tách, hoặc dùng Solo và Mute để nghe từng lớp âm thanh.
 
-Lần tách đầu cần tải khoảng 166 MB cho chế độ 4 stem hoặc 136 MB cho 6 stem. Trình duyệt lưu model nếu có chỗ. Studio hiển thị dung lượng tải, số đoạn đã tách và trạng thái xuất WAV. Bạn có thể hủy và thử lại với cùng file.
+Trang Vercel gửi file lên một máy xử lý riêng cho mỗi lượt tách. Model nằm sẵn trên máy chủ. Studio hiển thị số byte đã gửi, số đoạn đã tách và trạng thái xuất WAV. Bạn có thể hủy và thử lại với cùng file. Hãy lưu WAV trong vòng 15 phút từ lúc bắt đầu lượt tách.
+
+Khi tự chạy bản web cục bộ mà chưa cấu hình máy chủ, Web Worker xử lý file trên thiết bị và tải khoảng 166 MB cho chế độ 4 stem hoặc 136 MB cho 6 stem trong lần đầu. [HTDemucs trên trình duyệt](https://stemsplit.github.io/demucs-onnx/browser/)
 
 BPM và giọng trưởng/thứ được ước tính ngay khi mở bài, kể cả khi bạn chỉ muốn phân tích mà chưa tách stem. Kết quả thể hiện nhịp và giọng chính của toàn file. Bản nhạc đổi nhịp, chuyển giọng hoặc chỉ có tiếng trống có thể cho kết quả chưa rõ. [Phương pháp ước tính BPM](https://labrosa.ee.columbia.edu/~dpwe/resources/matlab/beat_simple/) · [Phương pháp ước tính giọng](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html)
 
@@ -64,7 +66,13 @@ DrumSep chạy thêm trên `drums.wav` và xuất `kick.wav`, `snare.wav`, `toms
 - Với video cần đăng nhập, bị giới hạn truy cập hoặc gặp lỗi extractor, hãy thử với file MP3/MP4 bạn có sẵn. YouTube và Facebook có thể thay đổi cách phân phối media. [Danh sách nền tảng và giới hạn của yt-dlp](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
 - Chất lượng tùy bản phối. Có thể còn tiếng lẫn giữa các stem, đặc biệt là hi-hat với cymbal. Chế độ guitar/piano dùng model sáu nguồn riêng. [Các model của HTDemucs](https://github.com/facebookresearch/demucs#available-models)
 
-## Bản thử nghiệm tách stem trên GPU
+## Máy chủ tách stem trên Vercel
+
+Chạy `sh cloud/provision-sandbox.sh` từ repo đã liên kết với Vercel để tạo snapshot Python, FFmpeg và hai model đã xác minh SHA-256. Đặt ID snapshot vào `AKAPELLA_SANDBOX_SNAPSHOT` trong môi trường triển khai và bật Vercel OIDC. Mỗi lượt tách chạy trong một sandbox 4 vCPU với thời hạn 15 phút và mạng đi ra bị chặn. Gateway chuyển trình duyệt sang URL riêng của job để tải file và WAV trực tiếp.
+
+Đặt secret ngẫu nhiên `AKAPELLA_RATE_KEY` dài ít nhất 32 ký tự cho bản công khai. Gateway giới hạn mỗi IP tối đa một job trong mỗi cửa sổ 20 giây và lưu mã HMAC của IP và cửa sổ trong tên sandbox. Môi trường thử nghiệm có thể dùng `AKAPELLA_PILOT_CODE` dài ít nhất 20 ký tự nếu chưa đặt rate key. Gói Hobby dừng tạo sandbox khi dùng hết hạn mức của tài khoản. [Vercel Sandbox](https://vercel.com/docs/sandbox) · [Hạn mức Sandbox](https://vercel.com/docs/sandbox/pricing)
+
+## Tùy chọn máy chủ GPU với Modal
 
 Khi cấu hình GPU được bật, web gửi file thẳng lên R2 và dùng GPU Modal để tách. Trình duyệt chỉ tải WAV đầu ra. BPM, tone và phát bản gốc vẫn chạy trên thiết bị. Bản thử nghiệm yêu cầu mã truy cập, giới hạn 20 job mỗi ngày UTC và chạy tối đa một container GPU cùng lúc.
 
@@ -99,6 +107,6 @@ Khi cấu hình GPU được bật, web gửi file thẳng lên R2 và dùng GPU
    | `AKAPELLA_MODAL_SECRET` | Proxy Token Secret |
    | `AKAPELLA_PILOT_CODE` | Mã truy cập tạo ngẫu nhiên |
 
-4. Kiểm tra `GET /api/cloud` trả `{"enabled":true}`. Thử một lượt 4 stem và một lượt 6 stem, từ tải file đến nghe mixer và tải WAV. Link tải xuống có hạn 10 phút. Khi cấu hình GPU chưa đầy đủ, web dùng chế độ tách trong trình duyệt.
+4. Bỏ `AKAPELLA_SANDBOX_SNAPSHOT` để ưu tiên Modal. Kiểm tra `GET /api/cloud` báo máy chủ đã bật. Thử một lượt 4 stem và một lượt 6 stem, từ tải file đến nghe mixer và tải WAV. Link tải xuống có hạn 10 phút.
 
 [Modal Proxy Tokens](https://modal.com/docs/guide/webhook-proxy-auth) · [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/) · [R2 lifecycle](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)

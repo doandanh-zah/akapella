@@ -9,17 +9,8 @@ import time
 import modal
 
 from cloud.store import JOB_TTL, MAX_BYTES, UPLOAD_TTL, Store
+from cloud.weights import WEIGHTS
 
-WEIGHTS = {
-    4: (
-        "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/d54ed9eb60e258ea82131c6ee14578628816456a/htdemucs_fp16weights.onnx",
-        "d05c269d0178d2a72ad484b10b11dd370193fc923201c3b27a99f848745db70a",
-    ),
-    6: (
-        "https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/49df9b6989cf2150840ea65b0bef77a2e471b678/htdemucs_6s_fp16weights.onnx",
-        "7ce55792e2231c93fbf92de95f5fd5b3a5e6c89f7db690dfd693e8f1dce56869",
-    ),
-}
 
 app = modal.App("akapella")
 storage = modal.Secret.from_name("akapella-r2")
@@ -93,11 +84,14 @@ class Separator:
                     if session.get_providers()[0] != "CUDAExecutionProvider":
                         raise RuntimeError("CUDA provider unavailable")
                     self.session, self.mode = session, mode
-                paths = split(self.session, stereo, mode, directory, progress)
+                def process_progress(stage, done, total):
+                    progress(stage, done, total * 2 if stage == "export" else total)
+
+                paths = split(self.session, stereo, mode, directory, process_progress)
                 for done, (name, path) in enumerate(paths.items(), 1):
                     check_cancel()
                     store.upload_output(job, name, path)
-                    progress("export", done, len(paths))
+                    progress("export", len(paths) + done, len(paths) * 2)
                 check_cancel()
                 store.state(job, "done", tracks=list(paths))
         except Cancelled:

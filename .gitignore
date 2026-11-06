@@ -4,3 +4,5 @@ __pycache__/
 stems/
 .vercel/
 .env*
+
+node_modules/

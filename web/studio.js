@@ -49,11 +49,12 @@ let cloudUnavailable = false;
 let scrubbing = false;
 let lastMixerState;
 const mixer = createMixer(renderMixer);
-const cloudConfig = cloudAvailable().then((enabled) => {
-  useCloud = enabled === true;
-  cloudUnavailable = enabled === null;
-  byId("cloud-access").hidden = !useCloud;
-  byId("pilot-code").required = useCloud;
+const cloudConfig = cloudAvailable().then((config) => {
+  useCloud = config?.enabled === true;
+  cloudUnavailable = config === null;
+  const requiresCode = useCloud && config.requiresCode !== false;
+  byId("cloud-access").hidden = !requiresCode;
+  byId("pilot-code").required = requiresCode;
   syncModeHint();
   if (!job) setRunLabel();
 });
@@ -216,8 +217,10 @@ function setRunLabel() {
 
 function syncModeHint() {
   const hint = byId("model-note");
-  hint.textContent = useCloud
-    ? "File được tải lên kho riêng tư để tách stem. BPM và tone vẫn được tính ngay trên máy."
+  hint.textContent = cloudUnavailable
+    ? "Chưa kết nối được máy chủ. Hãy tải lại trang để thử lại."
+    : useCloud
+    ? "Máy chủ xử lý file và tạo WAV. BPM và tone được tính ngay trên thiết bị."
     : `Lần đầu có thể cần tải model khoảng ${mode.value === "4" ? 166 : 136} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
   return hint;
 }
@@ -232,7 +235,7 @@ const mb = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 
 function reportProgress(step, message, detail = "", done, total) {
   job.updated = performance.now();
-  const stages = [job.cloud ? "Tải file lên" : "Model", "Tách stem", "Xuất kết quả"];
+  const stages = [job.cloud ? "Gửi file" : "Model", "Tách stem", "Xuất kết quả"];
   jobStage.textContent = `Bước ${step}/3 · ${stages[step - 1]}`;
   if (status.textContent !== message) status.textContent = message;
   jobDetail.textContent = detail;
@@ -375,6 +378,7 @@ function showResults(files, buffers) {
     for (const button of actions.children) button.disabled = !buffers.size;
     const link = document.createElement("a");
     link.href = url;
+    link.referrerPolicy = "no-referrer";
     link.download = name + ".wav";
     link.textContent = "Tải WAV ↓";
     link.setAttribute("aria-label", `Tải WAV · ${label}`);
@@ -470,7 +474,8 @@ async function prepareResults(files, mixTracks, readWav, current) {
     const message = buffers.size
       ? "Chọn Bản tách hoặc Solo để nghe."
       : "Không thể mở mixer trên thiết bị này. Bạn vẫn có thể tải WAV.";
-    finish(`Đã tạo ${files.size} track WAV. ${message}`, "done");
+    const expiry = current.cloud ? " Link tải WAV có thời hạn." : "";
+    finish(`Đã tạo ${files.size} track WAV. ${message}${expiry}`, "done");
   } catch {
     if (job === current) failed("Không thể chuẩn bị file WAV. Hãy thử tách lại với file ngắn hơn.");
   }
@@ -490,20 +495,20 @@ async function runCloud(current, splitMode, selected) {
       if (data.stage === "upload") {
         reportProgress(1, "Đang tải file lên…", `${mb.format(data.done / 1e6)} / ${mb.format(data.total / 1e6)} MB`, data.done, data.total);
       } else if (data.stage === "queued") {
-        reportProgress(2, "Đang chờ GPU…");
+        reportProgress(2, "Đang đưa bài vào xử lý…");
       } else if (data.stage === "prepare") {
         reportProgress(2, "Máy chủ đang chuẩn bị bài nhạc…");
       } else if (data.stage === "split") {
         reportProgress(2, "Máy chủ đang tách stem…", `${data.done}/${data.total} đoạn`, data.done, data.total);
       } else if (data.stage === "export") {
-        reportProgress(3, "Máy chủ đang xuất WAV…", `${data.done}/${data.total} file`, data.done, data.total * 2 - 1);
+        reportProgress(3, "Máy chủ đang xuất WAV…", "", data.done, data.total);
       }
     }, signal);
     if (job !== current) return;
     const files = new Map(tracks.map(({ name, url }) => [name, url]));
     const mixTracks = [...files.keys()].filter((name) => name !== "instrumental");
     await prepareResults(files, mixTracks, async (name) => {
-      const response = await fetch(files.get(name), { signal });
+      const response = await fetch(files.get(name), { signal, referrerPolicy: "no-referrer" });
       if (!response.ok) throw new Error("Không thể đọc WAV.");
       return response.arrayBuffer();
     }, current);
@@ -526,7 +531,7 @@ form.addEventListener("submit", (event) => {
   form.setAttribute("aria-busy", "true");
   showError();
   if (current.cloud) {
-    reportProgress(1, "Đang xin link tải file…");
+    reportProgress(1, "Đang mở máy chủ…");
     void runCloud(current, mode.value, selection.file);
     return;
   }

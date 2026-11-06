@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "",
-  "installCommand": "",
   "outputDirectory": "web",
   "headers": [
     {
@@ -12,5 +11,11 @@
         { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/cloud.mjs": {
+      "includeFiles": "cloud/{engine,sandbox_worker}.py",
+      "maxDuration": 60
+    }
+  }
 }

@@ -1,4 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
+import { createSandboxJob } from "../cloud/sandbox.mjs";
 
 const actions = new Set(["create", "start", "status", "cancel"]);
 
@@ -11,11 +13,17 @@ function matches(candidate, secret) {
 
 export default async function handler(req, res) {
   const { AKAPELLA_MODAL_URL: url, AKAPELLA_MODAL_KEY: key,
-    AKAPELLA_MODAL_SECRET: secret, AKAPELLA_PILOT_CODE: code } = process.env;
-  const enabled = Boolean(url && key && secret && code && code.length >= 20);
+    AKAPELLA_MODAL_SECRET: secret, AKAPELLA_PILOT_CODE: code,
+    AKAPELLA_SANDBOX_SNAPSHOT: snapshot, VERCEL_URL: deployment,
+    VERCEL_BRANCH_URL: branch, AKAPELLA_RATE_KEY: rateKey } = process.env;
+  const validCode = code?.length >= 20;
+  const publicSandbox = Boolean(snapshot && rateKey?.length >= 32);
+  const sandboxEnabled = Boolean(snapshot && (publicSandbox || validCode));
+  const enabled = sandboxEnabled || Boolean(url && key && secret && validCode);
+  const requiresCode = enabled && !publicSandbox;
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.method === "GET") return res.status(200).json({ enabled });
+  if (req.method === "GET") return res.status(200).json({ enabled, requiresCode });
   if (req.method !== "POST") return res.status(405).json({ error: "Phương thức không được hỗ trợ." });
   if (!enabled) return res.status(503).json({ error: "Máy chủ tách stem chưa mở." });
   if (!req.headers["content-type"]?.startsWith("application/json")) {
@@ -23,10 +31,44 @@ export default async function handler(req, res) {
   }
 
   const { action, job, size, mode, pilotCode } = req.body ?? {};
-  if (!actions.has(action)) return res.status(400).json({ error: "Yêu cầu không hợp lệ." });
-  if (action === "create" && !matches(pilotCode, code)) {
+  if (action === "create" && requiresCode && !matches(pilotCode, code)) {
     return res.status(403).json({ error: "Mã truy cập không đúng." });
   }
+  if (sandboxEnabled) {
+    if (action !== "create" || req.headers["x-akapella-create"] !== "1") {
+      return res.status(400).json({ error: "Yêu cầu không hợp lệ." });
+    }
+    if (!Number.isInteger(size) || size < 1 || size > 50_000_000 || ![4, 6].includes(mode)) {
+      return res.status(400).json({ error: "Chọn file tối đa 50 MB và chế độ 4 hoặc 6 stem." });
+    }
+    const origins = ["https://akapella.vercel.app", ...[deployment, branch].filter(Boolean).map(host => `https://${host}`)];
+    const origin = req.headers.origin ?? origins[0];
+    if (!origins.includes(origin)) return res.status(403).json({ error: "Nguồn yêu cầu không hợp lệ." });
+    let name;
+    if (publicSandbox) {
+      const ip = req.headers["x-vercel-forwarded-for"];
+      if (typeof ip !== "string" || !isIP(ip)) {
+        return res.status(403).json({ error: "Không xác minh được nguồn yêu cầu." });
+      }
+      // The platform reserves sandbox names atomically, including across function instances.
+      const window = Math.floor(Date.now() / 20_000);
+      const digest = createHmac("sha256", rateKey).update(`${window}:${ip}`).digest("hex").slice(0, 32);
+      name = `akapella-${digest}`;
+    }
+    try {
+      return res.status(200).json(await createSandboxJob(snapshot, size, mode, origin, name));
+    } catch (error) {
+      const status = error.response?.status ?? error.status;
+      const conflict = status === 400 && error.json?.error?.message?.includes(`with the name '${name}' already exists`);
+      if (publicSandbox && conflict) {
+        res.setHeader("Retry-After", "20");
+        return res.status(429).json({ error: "Bạn đã gửi một lượt tách. Hãy đợi 20 giây rồi thử lại." });
+      }
+      console.error("Akapella Sandbox creation failed", status ?? error.name);
+      return res.status(503).json({ error: "Chưa mở được máy chủ tách stem. Hãy thử lại sau." });
+    }
+  }
+  if (!actions.has(action)) return res.status(400).json({ error: "Yêu cầu không hợp lệ." });
   if (action !== "create" && (typeof job !== "string" || !/^[a-f0-9]{48}$/.test(job))) {
     return res.status(400).json({ error: "Mã job không hợp lệ." });
   }
