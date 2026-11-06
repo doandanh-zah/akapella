@@ -2,6 +2,12 @@
 
 Tách một bản nhạc thành các stem WAV trên máy. Nguồn có thể là file MP3, WAV, FLAC, M4A, MP4 hoặc link công khai mà yt-dlp đọc được. Chế độ mặc định xuất giọng hát, bass, trống tổng, phần nhạc còn lại và một bản nhạc không lời.
 
+## Dùng trên web
+
+Bản web trong thư mục `web/` tách file âm thanh thành 4 hoặc 6 stem, cho nghe thử và tải WAV. Web hỗ trợ file mono hoặc stereo, tối đa 50 MB và 5 phút. Model tải về trình duyệt và chạy trong Web Worker. Âm thanh của bạn được xử lý trên thiết bị. [HTDemucs trên trình duyệt](https://stemsplit.github.io/demucs-onnx/browser/)
+
+Với link YouTube, Facebook hoặc từng phần bộ trống như hi-hat, dùng bản CLI dưới đây.
+
 ## Chạy trên macOS
 
 Cần Python 3.11, FFmpeg, FFprobe và vài GB trống cho môi trường, model và file WAV. Để lấy nguồn YouTube, dùng Deno hoặc Node.js 22 trở lên. Akapella tự bật Node nếu có trong PATH.

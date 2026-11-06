@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Tách giọng hát, bass, trống và nhạc nền trực tiếp trong trình duyệt với Akapella.">
+  <meta name="theme-color" content="#101412">
+  <title>Akapella — Tách stem âm thanh</title>
+  <link rel="icon" href="/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/studio.css">
+  <script type="module" src="/studio.js"></script>
+</head>
+<body>
+  <header class="shell masthead">
+    <a class="brand" href="/"><img src="/mark.svg" alt="" width="30" height="30"> Akapella</a>
+    <a class="repo" href="https://github.com/doandanh-zah/akapella">GitHub <span aria-hidden="true">↗</span></a>
+  </header>
+  <main class="shell">
+    <section class="hero" aria-labelledby="headline">
+      <div>
+        <p class="eyebrow">STUDIO / TÁCH STEM</p>
+        <h1 id="headline">Tách riêng từng lớp âm thanh.</h1>
+        <p class="intro">Nghe riêng giọng hát, bass và trống. Xuất từng track WAV để luyện tập hoặc đưa vào bản phối của bạn.</p>
+      </div>
+      <figure class="signal" aria-hidden="true">
+        <svg viewBox="0 0 264 100" fill="none">
+          <path d="M0 50h264" stroke="#36423a"/>
+          <path d="M4 46v8m8-12v16m8-12v8m8-19v30m8-19v8m8-27v46m8-39v32m8-54v76m8-55v34m8-43v52m8-39v26m8-19v12m8-30v48m8-34v20m8-35v50m8-34v18m8-46v74m8-55v36m8-59v82m8-52v22m8-25v28m8-20v12m8-41v70m8-45v20m8-28v36m8-28v20m8-38v56m8-44v32m8-25v18m8-13v8m8-17v26m8-19v12m8-10v8" stroke="currentColor" stroke-width="3"/>
+        </svg>
+        <figcaption><span>HTDEMUCS</span><span>44,1 kHz / WAV</span></figcaption>
+      </figure>
+    </section>
+
+    <div class="workspace">
+      <section class="panel" aria-labelledby="source-heading">
+        <div class="section-heading"><span>01</span><h2 id="source-heading">Chọn nguồn</h2></div>
+        <form id="split-form">
+          <fieldset id="controls">
+            <legend class="sr-only">Nguồn và chế độ tách</legend>
+            <div class="drop" id="drop">
+              <input id="source" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.opus,.aac" aria-describedby="formats">
+              <label for="source">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>
+                <strong id="source-name">Chọn hoặc thả file nhạc</strong>
+                <span id="formats">MP3, WAV, FLAC, M4A · Tối đa 50 MB và 5 phút</span>
+              </label>
+            </div>
+            <button class="text-button" id="sample" type="button">Dùng file mẫu 4 giây</button>
+            <label class="select-label" for="mode">Chế độ tách</label>
+            <select id="mode" aria-describedby="model-note">
+              <option value="4">4 stem · Giọng, bass, trống, nhạc khác</option>
+              <option value="6">6 stem · Thêm guitar và piano</option>
+            </select>
+            <p id="model-note" class="muted">Model khoảng 166 MB. Âm thanh được xử lý trên thiết bị của bạn.</p>
+          </fieldset>
+          <div class="actions">
+            <button type="submit" id="run" disabled>Tách âm thanh <span aria-hidden="true">↗</span></button>
+            <button type="button" class="text-button" id="cancel" hidden>Hủy</button>
+          </div>
+        </form>
+        <div id="job" role="status" aria-live="polite">
+          <p id="status"></p>
+          <progress id="progress" aria-label="Tiến độ tách" hidden></progress>
+        </div>
+        <p id="error" role="alert" hidden></p>
+      </section>
+
+      <section class="panel results-panel" aria-labelledby="results-heading">
+        <div class="section-heading"><span>02</span><h2 id="results-heading">Kết quả</h2></div>
+        <p id="empty" class="empty">Các track sẽ xuất hiện ở đây sau khi tách. Bạn có thể nghe thử hoặc tải từng file WAV.</p>
+        <ul id="results" class="tracks" hidden></ul>
+      </section>
+    </div>
+
+    <aside class="local">
+      <div>
+        <h2>Link YouTube, Facebook và hi-hat</h2>
+        <p>Dùng bản CLI trên máy để xử lý link video hoặc tách riêng kick, snare, hi-hat và cymbal.</p>
+      </div>
+      <a href="https://github.com/doandanh-zah/akapella#chạy-trên-macos">Hướng dẫn CLI <span aria-hidden="true">↗</span></a>
+    </aside>
+    <noscript>Akapella cần JavaScript để tách âm thanh trong trình duyệt.</noscript>
+  </main>
+</body>
+</html>
