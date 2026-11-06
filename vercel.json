@@ -3,6 +3,7 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": "web",
+  "regions": ["sin1"],
   "headers": [
     {
       "source": "/(.*)",
@@ -14,7 +15,7 @@
   ],
   "functions": {
     "api/cloud.mjs": {
-      "includeFiles": "cloud/{engine,sandbox_worker}.py",
+      "includeFiles": "cloud/{engine,sandbox_worker,vocals}.py",
       "maxDuration": 60
     }
   }

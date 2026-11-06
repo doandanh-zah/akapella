@@ -15,7 +15,8 @@ export default async function handler(req, res) {
   const { AKAPELLA_MODAL_URL: url, AKAPELLA_MODAL_KEY: key,
     AKAPELLA_MODAL_SECRET: secret, AKAPELLA_PILOT_CODE: code,
     AKAPELLA_SANDBOX_SNAPSHOT: snapshot, VERCEL_URL: deployment,
-    VERCEL_BRANCH_URL: branch, AKAPELLA_RATE_KEY: rateKey } = process.env;
+    VERCEL_BRANCH_URL: branch, AKAPELLA_RATE_KEY: rateKey,
+    AKAPELLA_SANDBOX_REGION: region, AKAPELLA_SANDBOX_VOCALS: vocals } = process.env;
   const validCode = code?.length >= 20;
   const publicSandbox = Boolean(snapshot && rateKey?.length >= 32);
   const sandboxEnabled = Boolean(snapshot && (publicSandbox || validCode));
@@ -23,7 +24,8 @@ export default async function handler(req, res) {
   const requiresCode = enabled && !publicSandbox;
   res.setHeader("Cache-Control", "no-store");
 
-  if (req.method === "GET") return res.status(200).json({ enabled, requiresCode });
+  const modes = sandboxEnabled && vocals === "1" ? [2, 4, 6] : [4, 6];
+  if (req.method === "GET") return res.status(200).json({ enabled, requiresCode, modes });
   if (req.method !== "POST") return res.status(405).json({ error: "Phương thức không được hỗ trợ." });
   if (!enabled) return res.status(503).json({ error: "Máy chủ tách stem chưa mở." });
   if (!req.headers["content-type"]?.startsWith("application/json")) {
@@ -38,8 +40,8 @@ export default async function handler(req, res) {
     if (action !== "create" || req.headers["x-akapella-create"] !== "1") {
       return res.status(400).json({ error: "Yêu cầu không hợp lệ." });
     }
-    if (!Number.isInteger(size) || size < 1 || size > 50_000_000 || ![4, 6].includes(mode)) {
-      return res.status(400).json({ error: "Chọn file tối đa 50 MB và chế độ 4 hoặc 6 stem." });
+    if (!Number.isInteger(size) || size < 1 || size > 50_000_000 || !modes.includes(mode)) {
+      return res.status(400).json({ error: "Chọn file tối đa 50 MB và một chế độ đang mở." });
     }
     const origins = ["https://akapella.vercel.app", ...[deployment, branch].filter(Boolean).map(host => `https://${host}`)];
     const origin = req.headers.origin ?? origins[0];
@@ -56,7 +58,7 @@ export default async function handler(req, res) {
       name = `akapella-${digest}`;
     }
     try {
-      return res.status(200).json(await createSandboxJob(snapshot, size, mode, origin, name));
+      return res.status(200).json(await createSandboxJob(snapshot, size, mode, origin, name, region));
     } catch (error) {
       const status = error.response?.status ?? error.status;
       const conflict = status === 400 && error.json?.error?.message?.includes(`with the name '${name}' already exists`);

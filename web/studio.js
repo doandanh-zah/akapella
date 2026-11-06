@@ -7,7 +7,7 @@ const form = byId("split-form");
 const controls = byId("controls");
 const source = byId("source");
 const mode = form.elements.namedItem("mode");
-const drop = byId("drop");
+const drop = document.querySelector(".hero");
 const run = byId("run");
 const runLabel = byId("run-label");
 const jobStatus = byId("job");
@@ -46,25 +46,92 @@ let analysisWorker;
 let job;
 let useCloud = false;
 let cloudUnavailable = false;
+let cloudReady = false;
+let supportsVocals = true;
+let view = "vocals";
 let scrubbing = false;
 let lastMixerState;
+const workspace = byId("studio");
+const toolLinks = [...document.querySelectorAll("[data-view]")];
+const views = {
+  vocals: ["01 / TÁCH ÂM THANH", "Tách giọng|khỏi bản nhạc.", "Lấy giọng hát và bản không lời thành hai track riêng để nghe, phối lại hoặc hát karaoke."],
+  multitrack: ["02 / TÁCH NHIỀU STEM", "Tách từng lớp|âm thanh.", "Tách giọng, bass, trống và các nhạc cụ. Nghe và tải WAV riêng cho từng track."],
+  tempo: ["03 / PHÂN TÍCH NHẠC", "Tìm BPM|và tone.", "Mở một bài để ước tính nhịp độ và giọng trưởng hoặc thứ ngay trên thiết bị."],
+};
 const mixer = createMixer(renderMixer);
 const cloudConfig = cloudAvailable().then((config) => {
   useCloud = config?.enabled === true;
   cloudUnavailable = config === null;
+  cloudReady = true;
+  supportsVocals = Boolean(config?.enabled && config.modes?.includes(2));
   const requiresCode = useCloud && config.requiresCode !== false;
-  byId("cloud-access").hidden = !requiresCode;
   byId("pilot-code").required = requiresCode;
+  byId("nav-vocals").hidden = !supportsVocals;
+  syncView();
+});
+
+function syncView() {
+  const hash = location.hash.slice(1);
+  const previous = view;
+  view = hash === "youtube" || hash.startsWith("youtube=") ? "youtube"
+    : hash === "tempo" ? "tempo"
+    : hash === "multitrack" || !supportsVocals ? "multitrack" : "vocals";
+  workspace.hidden = view === "youtube";
+  byId("youtube").hidden = view !== "youtube";
+  workspace.dataset.view = view;
+  for (const link of toolLinks) {
+    if (link.dataset.view === view) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  if (view !== "youtube") {
+    const [kicker, heading, intro] = views[view];
+    const [line, nextLine] = heading.split("|");
+    byId("tool-kicker").textContent = kicker;
+    byId("headline").replaceChildren(line, document.createElement("br"), ` ${nextLine}`);
+    byId("tool-intro").textContent = intro;
+  }
+  syncWorkspace();
+  if (previous !== view && view !== "youtube" && !audio) {
+    void motion.then((effects) => { if (view === workspace.dataset.view) effects?.revealHero(); });
+  }
+}
+
+function syncWorkspace() {
+  workspace.toggleAttribute("data-loaded", Boolean(audio));
+  byId("source-name").textContent = audio ? "Đổi file" : "Chọn file nhạc";
+  byId("player").hidden = !audio;
+  byId("results-panel").hidden = results.hidden || view === "tempo";
+  byId("mode-group").hidden = view !== "multitrack";
+  byId("model-note").hidden = view === "tempo" || (!audio && useCloud);
+  byId("cloud-access").hidden = !byId("pilot-code").required || view === "tempo" || !audio;
+  byId("pilot-code").disabled = view === "tempo";
+  byId("split-actions").hidden = !job && (!audio || view === "tempo");
+  run.hidden = view === "tempo";
+  run.disabled = !audio || Boolean(job) || cloudUnavailable || !cloudReady;
+  byId("upload-note").textContent = view === "tempo"
+    ? "Phân tích ngay trên thiết bị."
+    : useCloud ? "File được gửi tới máy chủ để tách." : "";
   syncModeHint();
   if (!job) setRunLabel();
-});
+}
+
+for (const link of toolLinks) {
+  link.addEventListener("click", (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (location.hash !== link.hash) history.pushState(null, "", link.hash);
+    syncView();
+  });
+}
+addEventListener("hashchange", syncView);
+syncView();
 
 function showError(message = "") {
   errorText.textContent = message;
   errorText.hidden = !message;
   if (!message) {
     source.removeAttribute("aria-invalid");
-    source.setAttribute("aria-describedby", "formats");
+    source.setAttribute("aria-describedby", "formats upload-note");
   }
 }
 
@@ -140,20 +207,19 @@ async function select(file) {
   selection?.controller.abort();
   analysisWorker?.terminate();
   analysisWorker = undefined;
-  const current = { controller: new AbortController(), file };
+  const current = { controller: new AbortController(), file, view };
   selection = current;
   audio = undefined;
   scrubbing = false;
   mixer.setTrack(undefined);
   clearResults();
   clearAnalysis();
-  byId("source-name").textContent = file.name;
+  syncWorkspace();
   byId("song-name").textContent = "Đang đọc file…";
   byId("wave-source").textContent = "ĐANG ĐỌC FILE";
   wave.removeAttribute("data-loaded");
   wave.setAttribute("d", sampleWave);
   play.disabled = seek.disabled = monitorOriginal.disabled = run.disabled = true;
-  byId("jump-player").hidden = true;
   byId("play-error").hidden = true;
   byId("duration").textContent = "—";
   jobStatus.removeAttribute("data-state");
@@ -163,7 +229,6 @@ async function select(file) {
 
   try {
     const decoded = await decode(file, current.controller.signal);
-    await cloudConfig;
     if (selection !== current) return;
     audio = decoded;
     byId("song-name").textContent = file.name;
@@ -176,12 +241,15 @@ async function select(file) {
     seek.max = audio.duration;
     seek.setAttribute("aria-valuetext", `0:00 / ${formatTime(audio.duration)}`);
     play.disabled = seek.disabled = monitorOriginal.disabled = false;
-    run.disabled = cloudUnavailable;
-    if (cloudUnavailable) showError("Chưa xác định được chế độ tách. Hãy tải lại trang để thử lại.");
-    byId("jump-player").hidden = false;
     mixer.setTrack(audio);
     status.textContent = "";
+    syncWorkspace();
+    void motion.then((effects) => { if (selection === current) effects?.revealWave(); });
     analyze(audio);
+    await cloudConfig;
+    if (selection === current && current.view === "vocals" && view === "vocals" && !byId("pilot-code").required) {
+      form.requestSubmit(run);
+    }
   } catch (error) {
     if (selection !== current) return;
     byId("song-name").textContent = "Chưa chọn bài";
@@ -189,7 +257,7 @@ async function select(file) {
     status.textContent = "";
     if (!file.sample) {
       source.setAttribute("aria-invalid", "true");
-      source.setAttribute("aria-describedby", "formats error");
+      source.setAttribute("aria-describedby", "formats upload-note error");
     }
     showError(error.message);
   }
@@ -204,7 +272,9 @@ drop.addEventListener("dragover", (event) => {
   event.preventDefault();
   if (!job) drop.classList.add("dragging");
 });
-drop.addEventListener("dragleave", () => drop.classList.remove("dragging"));
+drop.addEventListener("dragleave", (event) => {
+  if (!drop.contains(event.relatedTarget)) drop.classList.remove("dragging");
+});
 drop.addEventListener("drop", (event) => {
   event.preventDefault();
   drop.classList.remove("dragging");
@@ -212,7 +282,7 @@ drop.addEventListener("drop", (event) => {
 });
 byId("sample").addEventListener("click", () => void select({ name: "akapella-mau.mp3", sample: true }));
 function setRunLabel() {
-  runLabel.textContent = useCloud ? "Tách trên máy chủ" : "Tách âm thanh";
+  runLabel.textContent = view === "vocals" ? "Tách giọng" : "Tách âm thanh";
 }
 
 function syncModeHint() {
@@ -262,8 +332,7 @@ function finish(message, state = "") {
   clearInterval(job?.timer);
   job = undefined;
   controls.disabled = false;
-  run.disabled = !audio || cloudUnavailable;
-  setRunLabel();
+  syncWorkspace();
   if (state === "error") runLabel.textContent = "Thử lại";
   jobStatus.dataset.state = state;
   cancel.hidden = progress.hidden = jobTop.hidden = jobDetail.hidden = jobStall.hidden = true;
@@ -387,7 +456,11 @@ function showResults(files, buffers) {
     results.append(item);
   }
   mixer.setStems(buffers);
+  byId("results-heading").textContent = files.size === 2
+    ? "Giọng hát & bản không lời"
+    : `${files.size - 1} stem và bản không lời`;
   results.hidden = false;
+  byId("results-panel").hidden = view === "tempo";
   empty.hidden = true;
   void motion.then((effects) => { if (!results.hidden) effects?.revealResults(results.children); });
 }
@@ -454,12 +527,15 @@ async function prepareResults(files, mixTracks, readWav, current) {
     current.exported = true;
     reportProgress(3, "Đang chuẩn bị mixer…", "Bạn đã có thể tải WAV ở danh sách stem.", files.size, exportTotal);
     try {
-      for (const name of mixTracks) {
-        const wav = await readWav(name);
+      for (let index = 0; index < mixTracks.length; index += 3) {
+        const batch = await Promise.allSettled(mixTracks.slice(index, index + 3).map(async (name) => {
+          const buffer = await readWav(name);
+          if (job !== current) return;
+          buffers.set(name, buffer);
+          reportProgress(3, "Đang chuẩn bị mixer…", `Đã mở ${buffers.size}/${mixTracks.length} track. WAV đã sẵn sàng.`, files.size + buffers.size, exportTotal);
+        }));
         if (job !== current) return;
-        buffers.set(name, await audioDecoder().decodeAudioData(wav));
-        if (job !== current) return;
-        reportProgress(3, "Đang chuẩn bị mixer…", `Đã mở ${buffers.size}/${mixTracks.length} stem. WAV đã sẵn sàng.`, files.size + buffers.size, exportTotal);
+        if (batch.some((result) => result.status === "rejected")) throw new Error("Không đọc được stem.");
       }
     } catch {
       buffers.clear();
@@ -502,15 +578,25 @@ async function runCloud(current, splitMode, selected) {
         reportProgress(2, "Máy chủ đang tách stem…", `${data.done}/${data.total} đoạn`, data.done, data.total);
       } else if (data.stage === "export") {
         reportProgress(3, "Máy chủ đang xuất WAV…", "", data.done, data.total);
+      } else if (data.stage === "preview") {
+        reportProgress(3, "Đang chuẩn bị bản nghe thử…");
       }
     }, signal);
     if (job !== current) return;
     const files = new Map(tracks.map(({ name, url }) => [name, url]));
-    const mixTracks = [...files.keys()].filter((name) => name !== "instrumental");
+    const previews = new Map(tracks.map(({ name, preview }) => [name, preview]));
+    const mixTracks = [...files.keys()].filter((name) => splitMode === 2 || name !== "instrumental");
+    const read = async (url) => {
+      const response = await fetch(url, { signal, referrerPolicy: "no-referrer" });
+      if (!response.ok) throw new Error("Không thể đọc âm thanh.");
+      return audioDecoder().decodeAudioData(await response.arrayBuffer());
+    };
     await prepareResults(files, mixTracks, async (name) => {
-      const response = await fetch(files.get(name), { signal, referrerPolicy: "no-referrer" });
-      if (!response.ok) throw new Error("Không thể đọc WAV.");
-      return response.arrayBuffer();
+      if (previews.get(name)) {
+        try { return await read(previews.get(name)); }
+        catch { signal.throwIfAborted(); }
+      }
+      return read(files.get(name));
     }, current);
   } catch (error) {
     if (job === current) failed(error.message);
@@ -519,7 +605,8 @@ async function runCloud(current, splitMode, selected) {
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (job || !audio || cloudUnavailable) return;
+  if (job || !audio || cloudUnavailable || !cloudReady || view === "tempo" || view === "youtube") return;
+  const splitMode = view === "vocals" ? 2 : Number(mode.value);
   const current = { started: performance.now(), timer: setInterval(tickJob, 1000), controller: new AbortController(), cloud: useCloud };
   job = current;
   controls.disabled = true;
@@ -527,12 +614,13 @@ form.addEventListener("submit", (event) => {
   runLabel.textContent = "Đang tách…";
   jobStatus.dataset.state = "busy";
   cancel.hidden = progress.hidden = jobTop.hidden = false;
+  byId("split-actions").hidden = false;
   jobElapsed.textContent = "0:00";
   form.setAttribute("aria-busy", "true");
   showError();
   if (current.cloud) {
     reportProgress(1, "Đang mở máy chủ…");
-    void runCloud(current, mode.value, selection.file);
+    void runCloud(current, splitMode, selection.file);
     return;
   }
   reportProgress(1, "Đang kiểm tra model…");
@@ -563,7 +651,7 @@ form.addEventListener("submit", (event) => {
           const files = new Map(data.tracks.map(({ name, wav }) => [name, new Blob([wav], { type: "audio/wav" })]));
           const mixTracks = data.tracks.filter(({ name }) => name !== "instrumental");
           const wavs = new Map(mixTracks.map(({ name, wav }) => [name, wav]));
-          void prepareResults(files, [...wavs.keys()], (name) => wavs.get(name), current);
+          void prepareResults(files, [...wavs.keys()], (name) => audioDecoder().decodeAudioData(wavs.get(name)), current);
         } catch {
           failed("Không thể chuẩn bị file WAV. Hãy thử tách lại với file ngắn hơn.");
         }

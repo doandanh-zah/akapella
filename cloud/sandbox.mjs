@@ -5,9 +5,9 @@ import { Sandbox } from "@vercel/sandbox";
 
 const directory = "/vercel/akapella";
 const port = 3000;
-const files = ["engine.py", "sandbox_worker.py"];
+const files = ["engine.py", "sandbox_worker.py", "vocals.py"];
 
-export async function createSandboxJob(snapshotId, size, mode, origin, name) {
+export async function createSandboxJob(snapshotId, size, mode, origin, name, region) {
   const job = randomBytes(24).toString("hex");
   const source = await Promise.all(files.map(async (name) => ({
     path: `${directory}/${name}`,
@@ -15,6 +15,7 @@ export async function createSandboxJob(snapshotId, size, mode, origin, name) {
   })));
   const sandbox = await Sandbox.create({
     name,
+    region,
     source: { type: "snapshot", snapshotId },
     ports: [port],
     resources: { vcpus: 4 },

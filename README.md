@@ -6,9 +6,9 @@ Tách một bản nhạc thành các stem WAV trên máy. Nguồn có thể là 
 
 [Mở Akapella](https://akapella.vercel.app/)
 
-Bản web trong thư mục `web/` tách file âm thanh mono hoặc stereo thành 4 hoặc 6 stem và xuất WAV. Studio hỗ trợ file tối đa 50 MB và 5 phút. Dùng dạng sóng để tua, chuyển giữa bản gốc và bản tách, hoặc dùng Solo và Mute để nghe từng lớp âm thanh.
+Bản web tách file mono hoặc stereo thành giọng hát và bản không lời, hoặc chia thành 4 hay 6 stem. Các track được xuất WAV. Studio hỗ trợ file tối đa 50 MB và 5 phút. Dùng dạng sóng để tua, chuyển giữa bản gốc và bản tách, hoặc dùng Solo và Mute để nghe từng lớp âm thanh.
 
-Trang Vercel gửi file lên một máy xử lý riêng cho mỗi lượt tách. Model nằm sẵn trên máy chủ. Studio hiển thị số byte đã gửi, số đoạn đã tách và trạng thái xuất WAV. Bạn có thể hủy và thử lại với cùng file. Hãy lưu WAV trong vòng 15 phút từ lúc bắt đầu lượt tách.
+Trang Vercel gửi file lên một máy xử lý riêng cho mỗi lượt tách. Model nằm sẵn trên máy chủ. Mixer dùng FLAC để nghe thử, với WAV làm phương án dự phòng. Studio hiển thị số byte đã gửi, số đoạn đã tách và trạng thái xuất WAV. Bạn có thể hủy và thử lại với cùng file. Hãy lưu WAV trong vòng 15 phút từ lúc bắt đầu lượt tách.
 
 Khi tự chạy bản web cục bộ mà chưa cấu hình máy chủ, Web Worker xử lý file trên thiết bị và tải khoảng 166 MB cho chế độ 4 stem hoặc 136 MB cho 6 stem trong lần đầu. [HTDemucs trên trình duyệt](https://stemsplit.github.io/demucs-onnx/browser/)
 
@@ -68,7 +68,7 @@ DrumSep chạy thêm trên `drums.wav` và xuất `kick.wav`, `snare.wav`, `toms
 
 ## Máy chủ tách stem trên Vercel
 
-Chạy `sh cloud/provision-sandbox.sh` từ repo đã liên kết với Vercel để tạo snapshot Python, FFmpeg và hai model đã xác minh SHA-256. Đặt ID snapshot vào `AKAPELLA_SANDBOX_SNAPSHOT` trong môi trường triển khai và bật Vercel OIDC. Mỗi lượt tách chạy trong một sandbox 4 vCPU với thời hạn 15 phút và mạng đi ra bị chặn. Gateway chuyển trình duyệt sang URL riêng của job để tải file và WAV trực tiếp.
+Chạy `AKAPELLA_SANDBOX_REGION=sin1 sh cloud/provision-sandbox.sh` từ repo đã liên kết với Vercel để tạo snapshot Python, FFmpeg, HTDemucs 4/6 stem và KUIELab MDX-Net. Script xác minh SHA-256 của từng model. Đặt ID snapshot vào `AKAPELLA_SANDBOX_SNAPSHOT`, vùng snapshot vào `AKAPELLA_SANDBOX_REGION` và `AKAPELLA_SANDBOX_VOCALS=1` để bật tách giọng hai track. Bật Vercel OIDC. [KUIELab MDX-Net, mã nguồn và trọng số](https://github.com/kuielab/mdx-net-submission/tree/18014d705e18f222e53c7d049a0994a27c1c41be) Mỗi lượt tách chạy trong một sandbox 4 vCPU với thời hạn 15 phút và mạng đi ra bị chặn. Gateway chuyển trình duyệt sang URL riêng của job để tải file và WAV trực tiếp.
 
 Đặt secret ngẫu nhiên `AKAPELLA_RATE_KEY` dài ít nhất 32 ký tự cho bản công khai. Gateway giới hạn mỗi IP tối đa một job trong mỗi cửa sổ 20 giây và lưu mã HMAC của IP và cửa sổ trong tên sandbox. Môi trường thử nghiệm có thể dùng `AKAPELLA_PILOT_CODE` dài ít nhất 20 ký tự nếu chưa đặt rate key. Gói Hobby dừng tạo sandbox khi dùng hết hạn mức của tài khoản. [Vercel Sandbox](https://vercel.com/docs/sandbox) · [Hạn mức Sandbox](https://vercel.com/docs/sandbox/pricing)
 

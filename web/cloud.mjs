@@ -64,7 +64,7 @@ function pause(signal) {
     const timer = setTimeout(() => {
       signal.removeEventListener("abort", abort);
       resolve();
-    }, 1600);
+    }, 1100);
     signal.addEventListener("abort", abort, { once: true });
   });
 }
@@ -99,6 +99,7 @@ export async function splitInCloud(file, mode, pilotCode, onProgress, signal) {
         completed = true;
         return worker ? current.tracks.map(name => ({
           name, url: new URL(`tracks/${name}.wav`, worker).href,
+          preview: current.previews ? new URL(`tracks/${name}.flac`, worker).href : undefined,
         })) : current.tracks;
       }
       if (current.stage === "failed" || current.stage === "cancelled") {

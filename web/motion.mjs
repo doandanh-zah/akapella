@@ -6,20 +6,28 @@ let results;
 let mode;
 let youtubeIntro;
 const waveElement = document.querySelector("[data-wave]");
+const hero = document.querySelector(".hero");
 
-if (!reduceMotion.matches) {
-  const hero = document.querySelector(".hero");
+export function revealHero() {
+  entrance?.revert();
+  if (reduceMotion.matches) return;
   entrance = createTimeline({ defaults: { ease: "out(4)" }, onComplete: resetWave })
     .add(hero.querySelectorAll("[data-hero]"), {
-      opacity: [0.55, 1], y: [18, 0], duration: 460, delay: stagger(75),
+      opacity: [0.62, 1], y: [15, 0], duration: 480, delay: stagger(57),
     }, 0)
-    .add(document.querySelector(".signal"), {
-      opacity: [0.55, 1], x: [14, 0], duration: 470,
-    }, 100);
-  if (waveElement.hasAttribute("data-placeholder")) {
-    entrance.add(createDrawable(waveElement), { draw: ["0 0", "0 1"], duration: 730 }, 180);
-  }
+    .add(hero.querySelector(".portal"), {
+      opacity: [0.72, 1], scale: [1.04, 1], duration: 850,
+    }, 0);
 }
+
+export function revealWave() {
+  if (reduceMotion.matches) return;
+  animate(createDrawable(waveElement), {
+    draw: ["0 0", "0 1"], duration: 440, ease: "out(3)", onComplete: resetWave,
+  });
+}
+
+if (!hero.closest("[hidden]")) revealHero();
 
 const youtube = document.querySelector(".youtube-intro");
 const observer = new IntersectionObserver(([entry]) => {

@@ -3,7 +3,8 @@
 set -eu
 
 sandbox_name="akapella-model-$(date +%s)"
-npx --yes vercel sandbox create --name "$sandbox_name" --vcpus 2 --timeout 12m --non-persistent --snapshot-expiration none
+region=${AKAPELLA_SANDBOX_REGION:-iad1}
+npx --yes vercel sandbox create --name "$sandbox_name" --region "$region" --vcpus 2 --timeout 12m --non-persistent --snapshot-expiration none
 trap 'npx --yes vercel sandbox stop "$sandbox_name" >/dev/null 2>&1 || true' EXIT
 npx --yes vercel sandbox exec "$sandbox_name" -- mkdir -p /vercel/akapella/weights
 npx --yes vercel sandbox cp cloud/weights.py "$sandbox_name:/vercel/akapella/weights.py"
@@ -19,9 +20,9 @@ import hashlib
 from pathlib import Path
 import subprocess
 
-from weights import WEIGHTS
+from weights import VOCAL_WEIGHTS, WEIGHTS
 
-for mode, (url, expected) in WEIGHTS.items():
+for mode, (url, expected) in (WEIGHTS | VOCAL_WEIGHTS).items():
     target = Path("weights") / f"{mode}.onnx"
     subprocess.run(["curl", "-fsSL", "--retry", "3", "--max-time", "300",
                     url, "-o", str(target)], check=True)

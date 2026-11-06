@@ -1,5 +1,6 @@
 """One private audio job inside an ephemeral Vercel Sandbox."""
 
+from concurrent.futures import ThreadPoolExecutor
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -10,7 +11,10 @@ import tempfile
 from threading import Lock, Thread, Timer
 from urllib.parse import urlsplit
 
-from engine import read_audio, split
+import soundfile as sf
+
+from engine import RATE, read_audio, split
+from vocals import isolate
 
 
 ACCESS = os.environ["JOB_ACCESS"]
@@ -32,21 +36,50 @@ def update(stage, **details):
             state = {"stage": stage, **details}
 
 
+def load_model():
+    import onnxruntime as ort
+
+    options = ort.SessionOptions()
+    if MODE != 2:
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    options.intra_op_num_threads = 4
+    return ort.InferenceSession(str(WEIGHTS / f"{MODE}.onnx"), options, ["CPUExecutionProvider"])
+
+
+def progress(stage, done, total):
+    update(stage, done=done, total=total)
+
+
 def process():
     try:
-        import onnxruntime as ort
-
         update("prepare")
         stereo = read_audio(SOURCE, WORK)
         SOURCE.unlink()
         (WORK / "normalized.wav").unlink()
-        options = ort.SessionOptions()
-        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-        options.intra_op_num_threads = 4
-        session = ort.InferenceSession(str(WEIGHTS / f"{MODE}.onnx"), options, ["CPUExecutionProvider"])
-        tracks.update(split(session, stereo, MODE, WORK,
-                            lambda stage, done, total: update(stage, done=done, total=total)))
-        update("done", tracks=list(tracks))
+        session = model.result()
+        if MODE == 2:
+            vocals = isolate(session, stereo, progress)
+            progress("export", 0, 2)
+            for index, (name, wave) in enumerate((("vocals", vocals), ("instrumental", stereo - vocals)), 1):
+                path = WORK / f"{name}.wav"
+                sf.write(path, wave.T, RATE, subtype="PCM_16")
+                tracks[name] = path
+                progress("export", index, 2)
+        else:
+            tracks.update(split(session, stereo, MODE, WORK, progress))
+
+        # The download remains WAV. The mixer can decode a smaller, lossless copy.
+        update("preview", tracks=list(tracks))
+        previews = True
+        try:
+            for name, path in tracks.items():
+                if name == "instrumental" and MODE != 2:
+                    continue
+                samples, rate = sf.read(path, dtype="int16")
+                sf.write(path.with_suffix(".flac"), samples, rate, subtype="PCM_16")
+        except (OSError, RuntimeError):
+            previews = False
+        update("done", tracks=list(tracks), previews=previews)
     except ValueError as exc:
         update("failed", message=str(exc))
     except Exception:
@@ -147,19 +180,24 @@ class Handler(BaseHTTPRequestHandler):
         route = self.route()
         if route in ("ready", "status"):
             return self.reply(state.copy())
-        if route and route.startswith("tracks/") and route.endswith(".wav") and state["stage"] == "done":
-            path = tracks.get(route[len("tracks/"):-len(".wav")])
+        if route and route.startswith("tracks/") and state["stage"] in ("preview", "done"):
+            name, _, extension = route.removeprefix("tracks/").rpartition(".")
+            path = tracks.get(name) if extension in ("wav", "flac") else None
+            if path and extension == "flac":
+                path = path.with_suffix(".flac") if state.get("previews") else None
             if path:
                 try:
                     file = path.open("rb")
                 except FileNotFoundError:
                     return self.reply({}, 404)
                 with file:
-                    self.send_headers(200, "audio/wav", os.fstat(file.fileno()).st_size, path.name)
+                    self.send_headers(200, f"audio/{extension}", os.fstat(file.fileno()).st_size, path.name)
                     shutil.copyfileobj(file, self.wfile)
                 return
         self.reply({}, 404)
 
 
 if __name__ == "__main__":
-    ThreadingHTTPServer(("0.0.0.0", 3000), Handler).serve_forever()
+    with ThreadPoolExecutor(max_workers=1) as loader:
+        model = loader.submit(load_model)
+        ThreadingHTTPServer(("0.0.0.0", 3000), Handler).serve_forever()

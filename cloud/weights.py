@@ -10,3 +10,11 @@ WEIGHTS = {
         "7ce55792e2231c93fbf92de95f5fd5b3a5e6c89f7db690dfd693e8f1dce56869",
     ),
 }
+
+# Official KUIELab MDX-Net submission B vocal checkpoint.
+VOCAL_WEIGHTS = {
+    2: (
+        "https://media.githubusercontent.com/media/kuielab/mdx-net-submission/18014d705e18f222e53c7d049a0994a27c1c41be/onnx/vocals.onnx",
+        "9b7dcb9d878acb0f3e64ff3fd27750faae96577013f6d50f5996875bf4250713",
+    ),
+}

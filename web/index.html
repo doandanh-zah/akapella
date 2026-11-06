@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Tách giọng hát, bass và trống. Nghe từng stem, tải WAV và kiểm tra BPM hoặc tone của bài nhạc.">
-  <meta name="theme-color" content="#101310">
+  <meta name="theme-color" content="#0a101a">
   <title>Akapella Studio — Tách stem và phân tích nhạc</title>
   <link rel="canonical" href="https://akapella.vercel.app/">
   <meta property="og:type" content="website">
@@ -23,52 +23,67 @@
 </head>
 <body>
   <a class="skip" href="#studio">Đến khu vực xử lý</a>
-  <header class="shell masthead">
+  <header class="masthead">
     <a class="brand" href="/" aria-label="Akapella, trang chủ">
-      <img src="/mark.svg" alt="" width="34" height="34">
-      <span>Akapella <small>STUDIO</small></span>
+      <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <circle cx="16" cy="16" r="14.5" stroke="currentColor"/>
+        <path d="M4 16h5l2-4 3 9 4-13 3 10 2-2h5" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+      </svg>
+      <span>akapella<span class="brand-period">.</span></span>
     </a>
-    <nav aria-label="Điều hướng chính">
-      <a href="#studio">Studio</a>
-      <a href="#youtube">YouTube <span aria-hidden="true">→</span> MP3</a>
-      <a class="repo" href="https://github.com/doandanh-zah/akapella">GitHub <span aria-hidden="true">↗</span></a>
-    </nav>
+    <p class="masthead-note">Studio âm thanh</p>
+    <a class="repo" href="https://github.com/doandanh-zah/akapella">GitHub <span aria-hidden="true">↗</span></a>
   </header>
-  <main class="shell">
-    <section class="hero" aria-labelledby="headline">
-      <div class="hero-copy">
-        <p class="eyebrow" data-hero><span class="signal-dot" aria-hidden="true"></span> Studio âm thanh</p>
-        <h1 id="headline" data-hero>Tách từng lớp, <em>nghe từng track.</em></h1>
-        <p class="intro" data-hero>Tách giọng, bass và trống để nghe riêng, hoặc tìm BPM và tone của bản nhạc.</p>
-      </div>
-    </section>
-
-    <div class="workspace" id="studio">
-      <section class="panel source-panel" aria-labelledby="source-heading">
-        <div class="section-heading"><span class="step">01</span><h2 id="source-heading">Xử lý âm thanh</h2></div>
+  <div class="app-layout">
+    <nav class="tools" aria-label="Công cụ">
+      <span class="tools-caption">Công cụ</span>
+      <a href="#studio" id="nav-vocals" data-view="vocals" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3l2-4 3 8 3-10 3 6h4"/></svg>Giọng &amp; nhạc
+      </a>
+      <a href="#multitrack" data-view="multitrack">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18M8 4v4m8 2v4m-6 2v4"/></svg>4–6 stem
+      </a>
+      <a href="#tempo" data-view="tempo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14l-4-15H9L5 20Zm5-3 7-8"/></svg>BPM &amp; tone
+      </a>
+      <a href="#youtube" data-view="youtube">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>YouTube
+      </a>
+    </nav>
+    <main class="shell" id="main">
+      <div class="workspace" id="studio">
+      <section class="source-panel" aria-labelledby="headline">
         <form id="split-form">
           <fieldset id="controls">
             <legend class="sr-only">Nguồn và chế độ</legend>
-            <div class="drop" id="drop">
-              <input id="source" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.opus,.aac" aria-labelledby="source-label" aria-describedby="formats">
-              <label for="source">
-                <span class="upload-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>
-                </span>
-                <span class="drop-copy">
-                  <span class="sr-only" id="source-label">Chọn file nhạc</span>
-                  <strong id="source-name">Chọn hoặc thả file nhạc</strong>
-                  <span id="formats">MP3, WAV, FLAC, M4A · Tối đa 50 MB và 5 phút</span>
-                </span>
-              </label>
+            <div class="hero">
+              <div class="portal" aria-hidden="true"></div>
+              <div class="hero-copy">
+                <p class="eyebrow" data-hero id="tool-kicker">01 / TÁCH ÂM THANH</p>
+                <h1 id="headline" data-hero>Tách giọng<br>khỏi bản nhạc.</h1>
+                <p class="intro" data-hero id="tool-intro">Lấy giọng hát và bản không lời thành hai track riêng để nghe, phối lại hoặc hát karaoke.</p>
+                <div class="drop" id="drop" data-hero>
+                  <input id="source" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.opus,.aac" aria-labelledby="source-label" aria-describedby="formats upload-note">
+                  <label for="source" id="source-label" class="primary choose-file">
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>
+                    <span id="source-name">Chọn file nhạc</span>
+                  </label>
+                  <span class="drop-note">hoặc kéo thả vào đây</span>
+                </div>
+                <div class="hero-meta" data-hero>
+                  <span id="formats">MP3, WAV, FLAC, M4A · 50 MB / 5 phút</span>
+                  <button class="text-button" id="sample" type="button">Thử bài mẫu <span aria-hidden="true">↗</span></button>
+                </div>
+                <p id="upload-note">File được gửi tới máy chủ để tách.</p>
+              </div>
+              <span class="portal-caption" aria-hidden="true">AKAPELLA<br>ÂM THANH TÁCH LỚP</span>
             </div>
-            <button class="text-button" id="sample" type="button"><span aria-hidden="true">▷</span> Thử bài mẫu</button>
-            <fieldset id="mode-group" class="mode-group" aria-describedby="model-note">
-              <legend>Chế độ xử lý</legend>
+            <fieldset id="mode-group" class="mode-group" aria-describedby="model-note" hidden>
+              <legend>Chọn số stem</legend>
               <div class="mode-options">
                 <div>
                   <input id="mode-4" type="radio" name="mode" value="4" checked>
-                  <label for="mode-4"><strong>4 stem</strong><span>Giọng, bass, trống và nhạc khác</span></label>
+                  <label for="mode-4"><strong>4 stem</strong><span>Giọng, bass, trống, nhạc khác</span></label>
                 </div>
                 <div>
                   <input id="mode-6" type="radio" name="mode" value="6">
@@ -76,16 +91,15 @@
                 </div>
               </div>
             </fieldset>
-            <p id="model-note" class="muted">Đang kiểm tra máy chủ tách stem…</p>
+            <p id="model-note" class="muted" hidden></p>
             <div id="cloud-access" hidden>
               <label for="pilot-code">Mã truy cập bản thử nghiệm</label>
-              <input id="pilot-code" type="password" autocomplete="off" maxlength="256" aria-describedby="model-note">
+              <input id="pilot-code" type="password" autocomplete="off" maxlength="256">
             </div>
           </fieldset>
-          <div class="actions">
+          <div class="actions" id="split-actions" hidden>
             <button class="primary" type="submit" id="run" disabled><span id="run-label">Tách âm thanh</span><span aria-hidden="true">↗</span></button>
-            <button type="button" class="text-button" id="cancel" hidden>Hủy</button>
-            <a class="jump-player" id="jump-player" href="#player" hidden>Nghe thử ↓</a>
+            <button type="button" class="text-button" id="cancel" hidden>Hủy lượt tách</button>
           </div>
         </form>
         <div id="job">
@@ -101,8 +115,8 @@
         <p id="error" class="error" role="alert" hidden></p>
       </section>
 
-      <section class="panel player-panel" id="player" aria-labelledby="player-heading">
-        <div class="section-heading"><span class="step">02</span><h2 id="player-heading">Nghe thử</h2></div>
+      <section class="panel player-panel" id="player" aria-labelledby="player-heading" hidden>
+        <div class="section-heading"><h2 id="player-heading">Bản đang mở</h2></div>
         <div class="song-info">
           <p id="song-name">Chưa chọn bài</p>
           <dl id="analysis" class="song-metrics">
@@ -132,8 +146,8 @@
         <p id="play-error" class="error" role="alert" hidden></p>
       </section>
 
-      <section class="panel results-panel" aria-labelledby="results-heading">
-        <div class="section-heading"><span class="step">03</span><h2 id="results-heading">Stem</h2><span class="result-format">WAV / 44,1 kHz</span></div>
+      <section class="panel results-panel" id="results-panel" aria-labelledby="results-heading" hidden>
+        <div class="section-heading"><h2 id="results-heading">Các track đã tách</h2><span class="result-format">WAV / 44,1 kHz</span></div>
         <div id="empty" class="empty">
           <p id="empty-copy">Tách bài nhạc để nghe riêng, tắt tiếng hoặc tải từng stem.</p>
         </div>
@@ -141,9 +155,9 @@
       </section>
     </div>
 
-    <section class="youtube" aria-labelledby="youtube-heading" id="youtube">
+    <section class="youtube" aria-labelledby="youtube-heading" id="youtube" hidden>
       <div class="youtube-intro">
-        <div class="section-heading"><span class="step">04</span><h2 id="youtube-heading">YouTube → MP3</h2></div>
+        <p class="eyebrow">04 / CHUYỂN ĐỊNH DẠNG</p><h1 id="youtube-heading">YouTube<br>sang MP3.</h1>
         <p>Tải âm thanh từ video công khai qua Akapella chạy trên máy.</p>
       </div>
       <div class="youtube-body">
@@ -166,5 +180,6 @@
     <p><strong>Akapella</strong><span>Tách stem từ link và tách riêng hi-hat, kick, snare bằng CLI.</span></p>
     <a href="https://github.com/doandanh-zah/akapella#chạy-trên-macos">Hướng dẫn CLI <span aria-hidden="true">↗</span></a>
   </footer>
+  </div>
 </body>
 </html>
