@@ -6,9 +6,9 @@ Tách một bản nhạc thành các stem WAV trên máy. Nguồn có thể là 
 
 [Mở Akapella](https://akapella.vercel.app/)
 
-Bản web trong thư mục `web/` tách file âm thanh thành 4 hoặc 6 stem, cho nghe thử và tải WAV. Web hỗ trợ file mono hoặc stereo, tối đa 50 MB và 5 phút. Model tải về trình duyệt và chạy trong Web Worker. Âm thanh của bạn được xử lý trên thiết bị. [HTDemucs trên trình duyệt](https://stemsplit.github.io/demucs-onnx/browser/)
+Bản web trong thư mục `web/` tách file âm thanh thành 4 hoặc 6 stem và xuất WAV. Dùng dạng sóng để tua, chuyển giữa bản gốc và bản tách, hoặc dùng Solo và Mute để nghe từng lớp âm thanh. Web hỗ trợ file mono hoặc stereo, tối đa 50 MB và 5 phút. Model tải về trình duyệt và chạy trong Web Worker. Âm thanh của bạn được xử lý trên thiết bị. [HTDemucs trên trình duyệt](https://stemsplit.github.io/demucs-onnx/browser/)
 
-Chọn **Tempo & tone** để ước tính BPM và giọng trưởng/thứ mà không cần tải model tách stem. Kết quả thể hiện nhịp và giọng chính của toàn file. Bản nhạc đổi nhịp, chuyển giọng hoặc chỉ có tiếng trống có thể cho kết quả chưa rõ. [Phương pháp ước tính BPM](https://labrosa.ee.columbia.edu/~dpwe/resources/matlab/beat_simple/) · [Phương pháp ước tính giọng](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html)
+BPM và giọng trưởng/thứ được ước tính ngay khi mở bài, kể cả khi bạn chỉ muốn phân tích mà chưa tách stem. Kết quả thể hiện nhịp và giọng chính của toàn file. Bản nhạc đổi nhịp, chuyển giọng hoặc chỉ có tiếng trống có thể cho kết quả chưa rõ. [Phương pháp ước tính BPM](https://labrosa.ee.columbia.edu/~dpwe/resources/matlab/beat_simple/) · [Phương pháp ước tính giọng](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html)
 
 Để tách stem từ link YouTube, Facebook hoặc tách từng phần bộ trống như hi-hat, dùng bản CLI dưới đây.
 

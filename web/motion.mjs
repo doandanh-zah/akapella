@@ -9,15 +9,16 @@ const waveElement = document.querySelector("[data-wave]");
 
 if (!reduceMotion.matches) {
   const hero = document.querySelector(".hero");
-  const wave = createDrawable(waveElement);
   entrance = createTimeline({ defaults: { ease: "out(4)" }, onComplete: resetWave })
     .add(hero.querySelectorAll("[data-hero]"), {
       opacity: [0.55, 1], y: [18, 0], duration: 460, delay: stagger(75),
     }, 0)
-    .add(hero.querySelector(".signal"), {
+    .add(document.querySelector(".signal"), {
       opacity: [0.55, 1], x: [14, 0], duration: 470,
-    }, 100)
-    .add(wave, { draw: ["0 0", "0 1"], duration: 730 }, 180);
+    }, 100);
+  if (waveElement.hasAttribute("data-placeholder")) {
+    entrance.add(createDrawable(waveElement), { draw: ["0 0", "0 1"], duration: 730 }, 180);
+  }
 }
 
 const youtube = document.querySelector(".youtube-intro");
