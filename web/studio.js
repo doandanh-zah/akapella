@@ -1,3 +1,4 @@
+import { cloudAvailable, splitInCloud } from "./cloud.mjs";
 import { createMixer, waveform } from "./mixer.mjs";
 
 const motion = import("./motion.mjs").catch(() => null);
@@ -43,9 +44,19 @@ let workerMode;
 let workerIdle;
 let analysisWorker;
 let job;
+let useCloud = false;
+let cloudUnavailable = false;
 let scrubbing = false;
 let lastMixerState;
 const mixer = createMixer(renderMixer);
+const cloudConfig = cloudAvailable().then((enabled) => {
+  useCloud = enabled === true;
+  cloudUnavailable = enabled === null;
+  byId("cloud-access").hidden = !useCloud;
+  byId("pilot-code").required = useCloud;
+  syncModeHint();
+  if (!job) setRunLabel();
+});
 
 function showError(message = "") {
   errorText.textContent = message;
@@ -128,7 +139,7 @@ async function select(file) {
   selection?.controller.abort();
   analysisWorker?.terminate();
   analysisWorker = undefined;
-  const current = { controller: new AbortController() };
+  const current = { controller: new AbortController(), file };
   selection = current;
   audio = undefined;
   scrubbing = false;
@@ -145,12 +156,13 @@ async function select(file) {
   byId("play-error").hidden = true;
   byId("duration").textContent = "—";
   jobStatus.removeAttribute("data-state");
-  runLabel.textContent = "Tách âm thanh";
+  setRunLabel();
   status.textContent = "Đang đọc âm thanh…";
   showError();
 
   try {
     const decoded = await decode(file, current.controller.signal);
+    await cloudConfig;
     if (selection !== current) return;
     audio = decoded;
     byId("song-name").textContent = file.name;
@@ -162,7 +174,9 @@ async function select(file) {
     wave.setAttribute("d", waveform(audio));
     seek.max = audio.duration;
     seek.setAttribute("aria-valuetext", `0:00 / ${formatTime(audio.duration)}`);
-    play.disabled = seek.disabled = monitorOriginal.disabled = run.disabled = false;
+    play.disabled = seek.disabled = monitorOriginal.disabled = false;
+    run.disabled = cloudUnavailable;
+    if (cloudUnavailable) showError("Chưa xác định được chế độ tách. Hãy tải lại trang để thử lại.");
     byId("jump-player").hidden = false;
     mixer.setTrack(audio);
     status.textContent = "";
@@ -196,18 +210,30 @@ drop.addEventListener("drop", (event) => {
   void select(event.dataTransfer.files[0]);
 });
 byId("sample").addEventListener("click", () => void select({ name: "akapella-mau.mp3", sample: true }));
-byId("mode-group").addEventListener("change", () => {
+function setRunLabel() {
+  runLabel.textContent = useCloud ? "Tách trên máy chủ" : "Tách âm thanh";
+}
+
+function syncModeHint() {
   const hint = byId("model-note");
-  hint.textContent = `Lần đầu có thể cần tải model khoảng ${mode.value === "4" ? 166 : 136} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
+  hint.textContent = useCloud
+    ? "File được tải lên kho riêng tư để tách stem. BPM và tone vẫn được tính ngay trên máy."
+    : `Lần đầu có thể cần tải model khoảng ${mode.value === "4" ? 166 : 136} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
+  return hint;
+}
+
+byId("mode-group").addEventListener("change", () => {
+  const hint = syncModeHint();
   void motion.then((effects) => effects?.revealMode(hint));
 });
 
-const stageLabels = ["Model", "Tách stem", "Xuất kết quả"];
+
 const mb = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 
 function reportProgress(step, message, detail = "", done, total) {
   job.updated = performance.now();
-  jobStage.textContent = `Bước ${step}/3 · ${stageLabels[step - 1]}`;
+  const stages = [job.cloud ? "Tải file lên" : "Model", "Tách stem", "Xuất kết quả"];
+  jobStage.textContent = `Bước ${step}/3 · ${stages[step - 1]}`;
   if (status.textContent !== message) status.textContent = message;
   jobDetail.textContent = detail;
   jobDetail.hidden = !detail;
@@ -233,8 +259,9 @@ function finish(message, state = "") {
   clearInterval(job?.timer);
   job = undefined;
   controls.disabled = false;
-  run.disabled = !audio;
-  runLabel.textContent = state === "error" ? "Thử lại" : "Tách âm thanh";
+  run.disabled = !audio || cloudUnavailable;
+  setRunLabel();
+  if (state === "error") runLabel.textContent = "Thử lại";
   jobStatus.dataset.state = state;
   cancel.hidden = progress.hidden = jobTop.hidden = jobDetail.hidden = jobStall.hidden = true;
   form.removeAttribute("aria-busy");
@@ -258,6 +285,7 @@ function keepWorkerBriefly() {
 }
 
 cancel.addEventListener("click", () => {
+  job?.controller.abort();
   stopWorker();
   const message = job?.exported
     ? "Đã dừng chuẩn bị mixer. Bạn vẫn có thể tải WAV."
@@ -319,8 +347,9 @@ function showResults(files, buffers) {
   clearResults();
   for (const [name, label] of Object.entries(labels)) {
     if (!files.has(name)) continue;
-    const url = URL.createObjectURL(files.get(name));
-    urls.add(url);
+    const file = files.get(name);
+    const url = typeof file === "string" ? file : URL.createObjectURL(file);
+    if (typeof file !== "string") urls.add(url);
     const item = document.createElement("li");
     item.className = "track";
     const index = document.createElement("span");
@@ -407,24 +436,23 @@ function analyze(buffer) {
 }
 
 function failed(message) {
+  job?.controller.abort();
   stopWorker();
   finish("", "error");
   showError(message);
 }
 
-async function prepareResults(tracks, current) {
-  keepWorkerBriefly();
-  const exportTotal = tracks.length * 2 - 1;
-  reportProgress(3, "Đang mở các file WAV…", "", tracks.length, exportTotal);
+async function prepareResults(files, mixTracks, readWav, current) {
+  const exportTotal = files.size + mixTracks.length;
   try {
-    const files = new Map(tracks.map(({ name, wav }) => [name, new Blob([wav], { type: "audio/wav" })]));
     const buffers = new Map();
-    const mixTracks = tracks.filter(({ name }) => name !== "instrumental");
     showResults(files, buffers);
     current.exported = true;
     reportProgress(3, "Đang chuẩn bị mixer…", "Bạn đã có thể tải WAV ở danh sách stem.", files.size, exportTotal);
     try {
-      for (const { name, wav } of mixTracks) {
+      for (const name of mixTracks) {
+        const wav = await readWav(name);
+        if (job !== current) return;
         buffers.set(name, await audioDecoder().decodeAudioData(wav));
         if (job !== current) return;
         reportProgress(3, "Đang chuẩn bị mixer…", `Đã mở ${buffers.size}/${mixTracks.length} stem. WAV đã sẵn sàng.`, files.size + buffers.size, exportTotal);
@@ -448,10 +476,46 @@ async function prepareResults(tracks, current) {
   }
 }
 
+async function runCloud(current, splitMode, selected) {
+  const signal = current.controller.signal;
+  try {
+    const file = selected.sample
+      ? await fetch("/demo.mp3", { signal }).then((res) => {
+        if (!res.ok) throw new Error("Không tải được bài mẫu.");
+        return res.blob();
+      })
+      : selected;
+    const tracks = await splitInCloud(file, Number(splitMode), byId("pilot-code").value, (data) => {
+      if (job !== current) return;
+      if (data.stage === "upload") {
+        reportProgress(1, "Đang tải file lên…", `${mb.format(data.done / 1e6)} / ${mb.format(data.total / 1e6)} MB`, data.done, data.total);
+      } else if (data.stage === "queued") {
+        reportProgress(2, "Đang chờ GPU…");
+      } else if (data.stage === "prepare") {
+        reportProgress(2, "Máy chủ đang chuẩn bị bài nhạc…");
+      } else if (data.stage === "split") {
+        reportProgress(2, "Máy chủ đang tách stem…", `${data.done}/${data.total} đoạn`, data.done, data.total);
+      } else if (data.stage === "export") {
+        reportProgress(3, "Máy chủ đang xuất WAV…", `${data.done}/${data.total} file`, data.done, data.total * 2 - 1);
+      }
+    }, signal);
+    if (job !== current) return;
+    const files = new Map(tracks.map(({ name, url }) => [name, url]));
+    const mixTracks = [...files.keys()].filter((name) => name !== "instrumental");
+    await prepareResults(files, mixTracks, async (name) => {
+      const response = await fetch(files.get(name), { signal });
+      if (!response.ok) throw new Error("Không thể đọc WAV.");
+      return response.arrayBuffer();
+    }, current);
+  } catch (error) {
+    if (job === current) failed(error.message);
+  }
+}
+
 form.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (job || !audio) return;
-  const current = { started: performance.now(), timer: setInterval(tickJob, 1000) };
+  if (job || !audio || cloudUnavailable) return;
+  const current = { started: performance.now(), timer: setInterval(tickJob, 1000), controller: new AbortController(), cloud: useCloud };
   job = current;
   controls.disabled = true;
   run.disabled = true;
@@ -461,6 +525,11 @@ form.addEventListener("submit", (event) => {
   jobElapsed.textContent = "0:00";
   form.setAttribute("aria-busy", "true");
   showError();
+  if (current.cloud) {
+    reportProgress(1, "Đang xin link tải file…");
+    void runCloud(current, mode.value, selection.file);
+    return;
+  }
   reportProgress(1, "Đang kiểm tra model…");
 
   try {
@@ -484,7 +553,15 @@ form.addEventListener("submit", (event) => {
       } else if (data.phase === "encode") {
         reportProgress(3, "Đang xuất WAV…", `Đã tạo ${data.done}/${data.total} file`, data.done, data.total * 2 - 1);
       } else if (data.phase === "done") {
-        void prepareResults(data.tracks, current);
+        keepWorkerBriefly();
+        try {
+          const files = new Map(data.tracks.map(({ name, wav }) => [name, new Blob([wav], { type: "audio/wav" })]));
+          const mixTracks = data.tracks.filter(({ name }) => name !== "instrumental");
+          const wavs = new Map(mixTracks.map(({ name, wav }) => [name, wav]));
+          void prepareResults(files, [...wavs.keys()], (name) => wavs.get(name), current);
+        } catch {
+          failed("Không thể chuẩn bị file WAV. Hãy thử tách lại với file ngắn hơn.");
+        }
       } else if (data.phase === "error") {
         console.error(data.message);
         failed(data.stage === "download"

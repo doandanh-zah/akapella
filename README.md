@@ -63,3 +63,42 @@ DrumSep chạy thêm trên `drums.wav` và xuất `kick.wav`, `snare.wav`, `toms
 - Mỗi lần chạy xử lý một nguồn dài tối đa 20 phút. Với link, Akapella lấy tối đa một mục và bỏ qua livestream. Hãy dùng nguồn bạn có quyền xử lý.
 - Với video cần đăng nhập, bị giới hạn truy cập hoặc gặp lỗi extractor, hãy thử với file MP3/MP4 bạn có sẵn. YouTube và Facebook có thể thay đổi cách phân phối media. [Danh sách nền tảng và giới hạn của yt-dlp](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
 - Chất lượng tùy bản phối. Có thể còn tiếng lẫn giữa các stem, đặc biệt là hi-hat với cymbal. Chế độ guitar/piano dùng model sáu nguồn riêng. [Các model của HTDemucs](https://github.com/facebookresearch/demucs#available-models)
+
+## Bản thử nghiệm tách stem trên GPU
+
+Khi cấu hình GPU được bật, web gửi file thẳng lên R2 và dùng GPU Modal để tách. Trình duyệt chỉ tải WAV đầu ra. BPM, tone và phát bản gốc vẫn chạy trên thiết bị. Bản thử nghiệm yêu cầu mã truy cập, giới hạn 20 job mỗi ngày UTC và chạy tối đa một container GPU cùng lúc.
+
+1. Tạo một bucket R2 riêng tư. Tạo API token **Object Read & Write** giới hạn cho bucket đó. Bật lifecycle xóa object có tiền tố `akapella/` sau 1 ngày. Cấu hình CORS cho domain sẽ chạy beta.
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://akapella.vercel.app"],
+       "AllowedMethods": ["PUT", "GET"],
+       "AllowedHeaders": ["Content-Type", "If-None-Match"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+2. Đăng nhập Modal, tạo secret `akapella-r2` và deploy worker. Secret cần `R2_BUCKET`, `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID` và `R2_SECRET_ACCESS_KEY`. Nhập các giá trị trong Modal Dashboard hoặc dùng file dotenv riêng được bảo vệ với `modal secret create --from-dotenv`. Không lưu các giá trị này trong Git.
+
+   ```bash
+   source .venv/bin/activate
+   python -m pip install 'modal>=1,<2' boto3
+   modal setup
+   modal deploy -m cloud.modal_app
+   ```
+
+3. Tạo **Proxy Token** trong Modal. Đặt bốn biến production trong Vercel rồi redeploy. Mã pilot dài ít nhất 20 ký tự và chỉ chia sẻ với người thử.
+
+   | Biến | Giá trị |
+   | --- | --- |
+   | `AKAPELLA_MODAL_URL` | URL của endpoint `api` do lệnh deploy Modal trả về |
+   | `AKAPELLA_MODAL_KEY` | Proxy Token ID |
+   | `AKAPELLA_MODAL_SECRET` | Proxy Token Secret |
+   | `AKAPELLA_PILOT_CODE` | Mã truy cập tạo ngẫu nhiên |
+
+4. Kiểm tra `GET /api/cloud` trả `{"enabled":true}`. Thử một lượt 4 stem và một lượt 6 stem, từ tải file đến nghe mixer và tải WAV. Link tải xuống có hạn 10 phút. Khi cấu hình GPU chưa đầy đủ, web dùng chế độ tách trong trình duyệt.
+
+[Modal Proxy Tokens](https://modal.com/docs/guide/webhook-proxy-auth) · [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/) · [R2 lifecycle](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)

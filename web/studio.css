@@ -334,3 +334,7 @@ progress { width: 100%; height: .45rem; margin-block-start: .45rem; accent-color
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; }
 }
+
+#cloud-access { margin-block-start: .8rem; }
+#cloud-access label { display: block; margin-block-end: .3rem; }
+#pilot-code { width: 100%; min-block-size: 44px; padding: .5rem; border: 1px solid var(--line); background: var(--canvas); color: var(--text); }

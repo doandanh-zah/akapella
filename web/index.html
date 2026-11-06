@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Tách giọng hát, bass và trống, hoặc kiểm tra BPM và tone. Akapella xử lý file nhạc ngay trên thiết bị của bạn.">
+  <meta name="description" content="Tách giọng hát, bass và trống. Nghe từng stem, tải WAV và kiểm tra BPM hoặc tone của bài nhạc.">
   <meta name="theme-color" content="#101310">
   <title>Akapella Studio — Tách stem và phân tích nhạc</title>
   <link rel="canonical" href="https://akapella.vercel.app/">
@@ -39,7 +39,7 @@
       <div class="hero-copy">
         <p class="eyebrow" data-hero><span class="signal-dot" aria-hidden="true"></span> Studio âm thanh</p>
         <h1 id="headline" data-hero>Tách từng lớp, <em>nghe từng track.</em></h1>
-        <p class="intro" data-hero>Tách giọng, bass và trống để nghe riêng, hoặc tìm BPM và tone của bản nhạc. File được xử lý ngay trên thiết bị của bạn.</p>
+        <p class="intro" data-hero>Tách giọng, bass và trống để nghe riêng, hoặc tìm BPM và tone của bản nhạc.</p>
       </div>
     </section>
 
@@ -77,6 +77,10 @@
               </div>
             </fieldset>
             <p id="model-note" class="muted">Lần đầu có thể cần tải model khoảng 166 MB. Âm thanh được xử lý trên thiết bị của bạn.</p>
+            <div id="cloud-access" hidden>
+              <label for="pilot-code">Mã truy cập bản thử nghiệm</label>
+              <input id="pilot-code" type="password" autocomplete="off" maxlength="256" aria-describedby="model-note">
+            </div>
           </fieldset>
           <div class="actions">
             <button class="primary" type="submit" id="run" disabled><span id="run-label">Tách âm thanh</span><span aria-hidden="true">↗</span></button>
