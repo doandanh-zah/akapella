@@ -1,9 +1,17 @@
 // HTDemucs ONNX tensor layout and overlap-add follow the demucs-onnx browser guide.
 // https://stemsplit.github.io/demucs-onnx/browser/
+import { loadModel } from "./model-loader.mjs";
+
 const runtime = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/";
 const models = {
-  4: "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/d54ed9eb60e258ea82131c6ee14578628816456a/htdemucs_fp16weights.onnx",
-  6: "https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/49df9b6989cf2150840ea65b0bef77a2e471b678/htdemucs_6s_fp16weights.onnx",
+  4: {
+    url: "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/d54ed9eb60e258ea82131c6ee14578628816456a/htdemucs_fp16weights.onnx",
+    size: 165_612_636,
+  },
+  6: {
+    url: "https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/49df9b6989cf2150840ea65b0bef77a2e471b678/htdemucs_6s_fp16weights.onnx",
+    size: 136_428_532,
+  },
 };
 const rate = 44100;
 const segment = 343980;
@@ -14,17 +22,22 @@ let session;
 let loadedMode;
 
 self.onmessage = async ({ data: { stereo, mode } }) => {
+  let stage = "download";
   try {
     if (loadedMode !== mode) {
-      postMessage({ phase: "model" });
       await session?.release();
       session = undefined;
       loadedMode = undefined;
-      const ort = await import(runtime + "ort.wasm.min.mjs");
+      const [ort, model] = await Promise.all([
+        import(runtime + "ort.wasm.min.mjs"),
+        loadModel(models[mode], (event) => postMessage(event)),
+      ]);
+      stage = "init";
+      postMessage({ phase: "init" });
       ort.env.wasm.wasmPaths = runtime;
       ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(navigator.hardwareConcurrency || 2, 4) : 1;
       // Graph optimization can exhaust the WASM heap while loading HTDemucs.
-      session = await ort.InferenceSession.create(models[mode], {
+      session = await ort.InferenceSession.create(model, {
         executionProviders: ["wasm"],
         graphOptimizationLevel: "disabled",
         enableCpuMemArena: false,
@@ -32,11 +45,11 @@ self.onmessage = async ({ data: { stereo, mode } }) => {
       });
       loadedMode = mode;
     }
-    postMessage({ phase: "processing" });
+    stage = "split";
     const tracks = await separate(stereo, Number(mode));
     postMessage({ phase: "done", tracks }, tracks.map(({ wav }) => wav));
   } catch (error) {
-    postMessage({ phase: "error", message: error instanceof Error ? error.message : String(error) });
+    postMessage({ phase: "error", stage, message: error instanceof Error ? error.message : String(error) });
   }
 };
 
@@ -44,6 +57,7 @@ async function separate(stereo, count) {
   const ort = await import(runtime + "ort.wasm.min.mjs");
   const frames = stereo[0].length;
   const chunks = Math.max(1, Math.ceil((frames - segment) / stride) + 1);
+  postMessage({ phase: "split", done: 0, chunks });
   const output = Array.from({ length: count }, () => new Float32Array(frames * 2));
   const weights = new Float32Array(frames);
   const chunk = new Float32Array(segment * 2);
@@ -85,15 +99,21 @@ async function separate(stereo, count) {
     postMessage({ phase: "split", done: index + 1, chunks });
   }
 
+  const total = count + 1;
+  postMessage({ phase: "encode", done: 0, total });
   const instrumental = new Float32Array(frames * 2);
   const tracks = output.map((samples, index) => {
     for (let i = 0; i < samples.length; i++) {
       samples[i] /= weights[Math.floor(i / 2)];
       if (names[index] !== "vocals") instrumental[i] += samples[i];
     }
-    return { name: names[index], wav: encodeWav(samples) };
+    const wav = encodeWav(samples);
+    postMessage({ phase: "encode", done: index + 1, total });
+    return { name: names[index], wav };
   });
-  return [...tracks, { name: "instrumental", wav: encodeWav(instrumental) }];
+  tracks.push({ name: "instrumental", wav: encodeWav(instrumental) });
+  postMessage({ phase: "encode", done: total, total });
+  return tracks;
 }
 
 function encodeWav(samples) {

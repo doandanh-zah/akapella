@@ -13,6 +13,11 @@ const jobStatus = byId("job");
 const cancel = byId("cancel");
 const status = byId("status");
 const progress = byId("progress");
+const jobTop = byId("job-top");
+const jobStage = byId("job-stage");
+const jobElapsed = byId("job-elapsed");
+const jobDetail = byId("job-detail");
+const jobStall = byId("job-stall");
 const errorText = byId("error");
 const results = byId("results");
 const empty = byId("empty");
@@ -34,6 +39,8 @@ let audio;
 let decoder;
 let selection;
 let worker;
+let workerMode;
+let workerIdle;
 let analysisWorker;
 let job;
 let scrubbing = false;
@@ -138,6 +145,7 @@ async function select(file) {
   byId("play-error").hidden = true;
   byId("duration").textContent = "—";
   jobStatus.removeAttribute("data-state");
+  runLabel.textContent = "Tách âm thanh";
   status.textContent = "Đang đọc âm thanh…";
   showError();
 
@@ -190,30 +198,71 @@ drop.addEventListener("drop", (event) => {
 byId("sample").addEventListener("click", () => void select({ name: "akapella-mau.mp3", sample: true }));
 byId("mode-group").addEventListener("change", () => {
   const hint = byId("model-note");
-  hint.textContent = `Model khoảng ${mode.value === "4" ? 166 : 136} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
+  hint.textContent = `Lần đầu có thể cần tải model khoảng ${mode.value === "4" ? 166 : 136} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
   void motion.then((effects) => effects?.revealMode(hint));
 });
 
+const stageLabels = ["Model", "Tách stem", "Xuất kết quả"];
+const mb = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
+
+function reportProgress(step, message, detail = "", done, total) {
+  job.updated = performance.now();
+  jobStage.textContent = `Bước ${step}/3 · ${stageLabels[step - 1]}`;
+  if (status.textContent !== message) status.textContent = message;
+  jobDetail.textContent = detail;
+  jobDetail.hidden = !detail;
+  jobStall.hidden = true;
+  if (total) {
+    progress.max = total;
+    progress.value = done;
+  } else {
+    progress.removeAttribute("value");
+  }
+}
+
+function tickJob() {
+  if (!job) return;
+  const now = performance.now();
+  jobElapsed.textContent = formatTime((now - job.started) / 1000);
+  const idle = now - job.updated;
+  jobStall.hidden = idle < 20_000;
+  if (idle > 180_000) failed("Quá lâu chưa có thêm tiến độ. Hãy thử lại với file ngắn hơn.");
+}
+
 function finish(message, state = "") {
+  clearInterval(job?.timer);
   job = undefined;
   controls.disabled = false;
   run.disabled = !audio;
-  runLabel.textContent = "Tách âm thanh";
+  runLabel.textContent = state === "error" ? "Thử lại" : "Tách âm thanh";
   jobStatus.dataset.state = state;
-  cancel.hidden = true;
-  progress.hidden = true;
+  cancel.hidden = progress.hidden = jobTop.hidden = jobDetail.hidden = jobStall.hidden = true;
   form.removeAttribute("aria-busy");
   status.textContent = message;
 }
 
 function stopWorker() {
+  clearTimeout(workerIdle);
   worker?.terminate();
   worker = undefined;
+  workerMode = undefined;
+}
+
+function keepWorkerBriefly() {
+  // Free the WASM heap on smaller devices and after longer jobs.
+  if ((navigator.deviceMemory ?? 0) >= 8 && audio.duration <= 60) {
+    workerIdle = setTimeout(stopWorker, 60_000);
+  } else {
+    stopWorker();
+  }
 }
 
 cancel.addEventListener("click", () => {
   stopWorker();
-  finish("Đã hủy. Bạn có thể thử lại với cùng file.", "cancelled");
+  const message = job?.exported
+    ? "Đã dừng chuẩn bị mixer. Bạn vẫn có thể tải WAV."
+    : "Đã hủy. Bạn có thể thử lại với cùng file.";
+  finish(message, "cancelled");
   run.focus();
 });
 
@@ -359,26 +408,36 @@ function analyze(buffer) {
 
 function failed(message) {
   stopWorker();
-  finish("");
+  finish("", "error");
   showError(message);
 }
 
 async function prepareResults(tracks, current) {
-  stopWorker();
-  status.textContent = "Đang chuẩn bị bản nghe và file WAV…";
+  keepWorkerBriefly();
+  reportProgress(3, "Đang mở các file WAV…");
   try {
     const files = new Map(tracks.map(({ name, wav }) => [name, new Blob([wav], { type: "audio/wav" })]));
     const buffers = new Map();
+    const mixTracks = tracks.filter(({ name }) => name !== "instrumental");
+    showResults(files, buffers);
+    current.exported = true;
+    reportProgress(3, "Đang chuẩn bị mixer…", "Bạn đã có thể tải WAV ở danh sách stem.", 0, mixTracks.length);
     try {
-      for (const { name, wav } of tracks) {
-        if (name !== "instrumental") buffers.set(name, await audioDecoder().decodeAudioData(wav));
+      for (const { name, wav } of mixTracks) {
+        buffers.set(name, await audioDecoder().decodeAudioData(wav));
         if (job !== current) return;
+        reportProgress(3, "Đang chuẩn bị mixer…", `Đã mở ${buffers.size}/${mixTracks.length} stem. WAV đã sẵn sàng.`, buffers.size, mixTracks.length);
       }
     } catch {
       buffers.clear();
     }
     if (job !== current) return;
-    showResults(files, buffers);
+    if (buffers.size) {
+      for (const buttons of rowButtons.values()) {
+        for (const button of Object.values(buttons)) button.disabled = false;
+      }
+      mixer.setStems(buffers);
+    }
     const message = buffers.size
       ? "Chọn Bản tách hoặc Solo để nghe."
       : "Không thể mở mixer trên thiết bị này. Bạn vẫn có thể tải WAV.";
@@ -391,36 +450,45 @@ async function prepareResults(tracks, current) {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   if (job || !audio) return;
-  const current = {};
+  const current = { started: performance.now(), timer: setInterval(tickJob, 1000) };
   job = current;
   controls.disabled = true;
   run.disabled = true;
   runLabel.textContent = "Đang tách…";
   jobStatus.dataset.state = "busy";
-  cancel.hidden = false;
+  cancel.hidden = progress.hidden = jobTop.hidden = false;
+  jobElapsed.textContent = "0:00";
   form.setAttribute("aria-busy", "true");
-  status.textContent = "Đang khởi động bộ tách…";
-  progress.removeAttribute("value");
-  progress.hidden = false;
   showError();
+  reportProgress(1, "Đang kiểm tra model…");
 
   try {
-    worker = new Worker("/separator.js", { type: "module" });
+    clearTimeout(workerIdle);
+    if (workerMode !== mode.value) stopWorker();
+    if (!worker) {
+      worker = new Worker("/separator.js", { type: "module" });
+      workerMode = mode.value;
+    }
     worker.onmessage = ({ data }) => {
       if (job !== current) return;
       if (data.phase === "model") {
-        status.textContent = "Đang tải model. Lần đầu có thể mất vài phút…";
-      } else if (data.phase === "processing") {
-        status.textContent = "Đang tách các stem…";
+        const detail = `${mb.format(data.done / 1e6)} / ${mb.format(data.total / 1e6)} MB · ${Math.floor(100 * data.done / data.total)}%`;
+        reportProgress(1, "Đang tải model…", detail, data.done, data.total);
+      } else if (data.phase === "cached") {
+        reportProgress(1, "Đang đọc model đã lưu…", "Dùng bản lưu trên thiết bị.");
+      } else if (data.phase === "init") {
+        reportProgress(1, "Đang khởi tạo bộ tách…", "Model đã sẵn sàng. Trình duyệt đang chuẩn bị chạy.");
       } else if (data.phase === "split") {
-        progress.max = data.chunks;
-        progress.value = data.done;
-        status.textContent = `Đã xử lý ${data.done}/${data.chunks} đoạn…`;
+        reportProgress(2, "Đang tách stem…", `Đã xử lý ${data.done}/${data.chunks} đoạn · ${Math.floor(100 * data.done / data.chunks)}%`, data.done, data.chunks);
+      } else if (data.phase === "encode") {
+        reportProgress(3, "Đang xuất WAV…", `Đã tạo ${data.done}/${data.total} file`, data.done, data.total);
       } else if (data.phase === "done") {
         void prepareResults(data.tracks, current);
       } else if (data.phase === "error") {
         console.error(data.message);
-        failed("Không thể chạy model. Kiểm tra kết nối rồi thử lại trên trình duyệt máy tính.");
+        failed(data.stage === "download"
+          ? "Không tải được model. Kiểm tra mạng và bấm Thử lại."
+          : "Trình duyệt không tách được file này. Hãy thử lại hoặc dùng file ngắn hơn.");
       }
     };
     worker.onerror = () => {

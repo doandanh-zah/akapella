@@ -76,7 +76,7 @@
                 </div>
               </div>
             </fieldset>
-            <p id="model-note" class="muted">Model khoảng 166 MB. Âm thanh được xử lý trên thiết bị của bạn.</p>
+            <p id="model-note" class="muted">Lần đầu có thể cần tải model khoảng 166 MB. Âm thanh được xử lý trên thiết bị của bạn.</p>
           </fieldset>
           <div class="actions">
             <button class="primary" type="submit" id="run" disabled><span id="run-label">Tách âm thanh</span><span aria-hidden="true">↗</span></button>
@@ -84,9 +84,15 @@
             <a class="jump-player" id="jump-player" href="#player" hidden>Nghe thử ↓</a>
           </div>
         </form>
-        <div id="job" role="status" aria-live="polite">
-          <p id="status"></p>
-          <progress id="progress" aria-label="Tiến độ xử lý" hidden></progress>
+        <div id="job">
+          <div class="job-top" id="job-top" hidden>
+            <span id="job-stage"></span>
+            <span id="job-elapsed"></span>
+          </div>
+          <p id="status" role="status"></p>
+          <progress id="progress" aria-labelledby="job-stage" aria-describedby="job-detail" hidden></progress>
+          <p id="job-detail" class="muted" hidden></p>
+          <p id="job-stall" class="muted" hidden>Chưa có thêm tiến độ. Bạn có thể đợi hoặc hủy và thử lại.</p>
         </div>
         <p id="error" class="error" role="alert" hidden></p>
       </section>
