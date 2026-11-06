@@ -245,6 +245,15 @@ h2 { font: 700 clamp(1.25rem, 2.6vw, 1.9rem)/1.18 var(--display); letter-spacing
 .footer a { min-height: 44px; display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
 .notice { color: var(--warning); margin-block: 1rem; }
 
+@media (min-width: 1080px) {
+  .workspace[data-results] {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    column-gap: clamp(1.25rem, 3vw, 2.6rem);
+    align-items: start;
+  }
+  .workspace[data-results] .source-panel { grid-column: 1 / -1; }
+}
 @media (max-width: 830px) {
   .app-layout { grid-template-columns: minmax(0, 1fr); }
   .tools {

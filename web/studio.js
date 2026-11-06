@@ -49,6 +49,7 @@ let cloudUnavailable = false;
 let cloudReady = false;
 let supportsVocals = true;
 let view = "vocals";
+let completedMode;
 let scrubbing = false;
 let lastMixerState;
 const workspace = byId("studio");
@@ -98,6 +99,7 @@ function syncView() {
 
 function syncWorkspace() {
   workspace.toggleAttribute("data-loaded", Boolean(audio));
+  workspace.toggleAttribute("data-results", !results.hidden && view !== "tempo");
   byId("source-name").textContent = audio ? "Đổi file" : "Chọn file nhạc";
   byId("player").hidden = !audio;
   byId("results-panel").hidden = results.hidden || view === "tempo";
@@ -105,7 +107,8 @@ function syncWorkspace() {
   byId("model-note").hidden = view === "tempo" || (!audio && useCloud);
   byId("cloud-access").hidden = !byId("pilot-code").required || view === "tempo" || !audio;
   byId("pilot-code").disabled = view === "tempo";
-  byId("split-actions").hidden = !job && (!audio || view === "tempo");
+  const alreadySplit = completedMode === (view === "vocals" ? 2 : Number(mode.value));
+  byId("split-actions").hidden = !job && (!audio || view === "tempo" || alreadySplit);
   run.hidden = view === "tempo";
   run.disabled = !audio || Boolean(job) || cloudUnavailable || !cloudReady;
   byId("upload-note").textContent = view === "tempo"
@@ -210,6 +213,7 @@ async function select(file) {
   const current = { controller: new AbortController(), file, view };
   selection = current;
   audio = undefined;
+  completedMode = undefined;
   scrubbing = false;
   mixer.setTrack(undefined);
   clearResults();
@@ -296,6 +300,7 @@ function syncModeHint() {
 }
 
 byId("mode-group").addEventListener("change", () => {
+  syncWorkspace();
   const hint = syncModeHint();
   void motion.then((effects) => effects?.revealMode(hint));
 });
@@ -461,6 +466,7 @@ function showResults(files, buffers) {
     : `${files.size - 1} stem và bản không lời`;
   results.hidden = false;
   byId("results-panel").hidden = view === "tempo";
+  workspace.toggleAttribute("data-results", view !== "tempo");
   empty.hidden = true;
   void motion.then((effects) => { if (!results.hidden) effects?.revealResults(results.children); });
 }
@@ -551,6 +557,7 @@ async function prepareResults(files, mixTracks, readWav, current) {
       ? "Chọn Bản tách hoặc Solo để nghe."
       : "Không thể mở mixer trên thiết bị này. Bạn vẫn có thể tải WAV.";
     const expiry = current.cloud ? " Link tải WAV có thời hạn." : "";
+    completedMode = current.mode;
     finish(`Đã tạo ${files.size} track WAV. ${message}${expiry}`, "done");
   } catch {
     if (job === current) failed("Không thể chuẩn bị file WAV. Hãy thử tách lại với file ngắn hơn.");
@@ -607,7 +614,7 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   if (job || !audio || cloudUnavailable || !cloudReady || view === "tempo" || view === "youtube") return;
   const splitMode = view === "vocals" ? 2 : Number(mode.value);
-  const current = { started: performance.now(), timer: setInterval(tickJob, 1000), controller: new AbortController(), cloud: useCloud };
+  const current = { started: performance.now(), timer: setInterval(tickJob, 1000), controller: new AbortController(), cloud: useCloud, mode: splitMode };
   job = current;
   controls.disabled = true;
   run.disabled = true;
