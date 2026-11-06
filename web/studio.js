@@ -414,19 +414,20 @@ function failed(message) {
 
 async function prepareResults(tracks, current) {
   keepWorkerBriefly();
-  reportProgress(3, "Đang mở các file WAV…");
+  const exportTotal = tracks.length * 2 - 1;
+  reportProgress(3, "Đang mở các file WAV…", "", tracks.length, exportTotal);
   try {
     const files = new Map(tracks.map(({ name, wav }) => [name, new Blob([wav], { type: "audio/wav" })]));
     const buffers = new Map();
     const mixTracks = tracks.filter(({ name }) => name !== "instrumental");
     showResults(files, buffers);
     current.exported = true;
-    reportProgress(3, "Đang chuẩn bị mixer…", "Bạn đã có thể tải WAV ở danh sách stem.", 0, mixTracks.length);
+    reportProgress(3, "Đang chuẩn bị mixer…", "Bạn đã có thể tải WAV ở danh sách stem.", files.size, exportTotal);
     try {
       for (const { name, wav } of mixTracks) {
         buffers.set(name, await audioDecoder().decodeAudioData(wav));
         if (job !== current) return;
-        reportProgress(3, "Đang chuẩn bị mixer…", `Đã mở ${buffers.size}/${mixTracks.length} stem. WAV đã sẵn sàng.`, buffers.size, mixTracks.length);
+        reportProgress(3, "Đang chuẩn bị mixer…", `Đã mở ${buffers.size}/${mixTracks.length} stem. WAV đã sẵn sàng.`, files.size + buffers.size, exportTotal);
       }
     } catch {
       buffers.clear();
@@ -481,7 +482,7 @@ form.addEventListener("submit", (event) => {
       } else if (data.phase === "split") {
         reportProgress(2, "Đang tách stem…", `Đã xử lý ${data.done}/${data.chunks} đoạn · ${Math.floor(100 * data.done / data.chunks)}%`, data.done, data.chunks);
       } else if (data.phase === "encode") {
-        reportProgress(3, "Đang xuất WAV…", `Đã tạo ${data.done}/${data.total} file`, data.done, data.total);
+        reportProgress(3, "Đang xuất WAV…", `Đã tạo ${data.done}/${data.total} file`, data.done, data.total * 2 - 1);
       } else if (data.phase === "done") {
         void prepareResults(data.tracks, current);
       } else if (data.phase === "error") {
