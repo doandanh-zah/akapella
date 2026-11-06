@@ -8,7 +8,9 @@ Tách một bản nhạc thành các stem WAV trên máy. Nguồn có thể là 
 
 Bản web trong thư mục `web/` tách file âm thanh thành 4 hoặc 6 stem, cho nghe thử và tải WAV. Web hỗ trợ file mono hoặc stereo, tối đa 50 MB và 5 phút. Model tải về trình duyệt và chạy trong Web Worker. Âm thanh của bạn được xử lý trên thiết bị. [HTDemucs trên trình duyệt](https://stemsplit.github.io/demucs-onnx/browser/)
 
-Với link YouTube, Facebook hoặc từng phần bộ trống như hi-hat, dùng bản CLI dưới đây.
+Chọn **Tempo & tone** để ước tính BPM và giọng trưởng/thứ mà không cần tải model tách stem. Kết quả thể hiện nhịp và giọng chính của toàn file. Bản nhạc đổi nhịp, chuyển giọng hoặc chỉ có tiếng trống có thể cho kết quả chưa rõ. [Phương pháp ước tính BPM](https://labrosa.ee.columbia.edu/~dpwe/resources/matlab/beat_simple/) · [Phương pháp ước tính giọng](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html)
+
+Để tách stem từ link YouTube, Facebook hoặc tách từng phần bộ trống như hi-hat, dùng bản CLI dưới đây.
 
 ## Chạy trên macOS
 
@@ -32,6 +34,17 @@ python akapella.py "bai-hat.flac" -o stems/sau-stem --stems 6
 ```
 
 Dùng thư mục đầu ra mới cho mỗi lần chạy. Chế độ mặc định xuất `vocals.wav`, `bass.wav`, `drums.wav` và `other.wav`. `instrumental.wav` là bản cộng các stem ngoài giọng hát. Với `--stems 6`, bản không lời cũng bao gồm guitar và piano. Các WAV đều là stereo 44,1 kHz và bắt đầu cùng mốc thời gian để đưa vào DAW.
+
+## Tải MP3 từ YouTube
+
+Cài môi trường Python và FFmpeg theo hướng dẫn trên, sau đó chạy trong thư mục repo:
+
+```bash
+source .venv/bin/activate
+python serve.py
+```
+
+Mở [Akapella trên máy](http://127.0.0.1:8765/#youtube), dán link và chọn **Tải MP3**. Akapella xuất MP3 192 kbps từ video công khai dài tối đa 20 phút. Trang Vercel chuyển link đã nhập sang trang trên máy. Quá trình lấy video và đổi sang MP3 chạy bằng yt-dlp và FFmpeg trên máy của bạn. [Hỗ trợ YouTube của yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/EJS)
 
 ## Tách riêng hi-hat và từng phần của bộ trống
 

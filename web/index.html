@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Tách giọng hát, bass, trống và nhạc nền trực tiếp trong trình duyệt với Akapella.">
+  <meta name="description" content="Tách stem, đo tempo (BPM) và tìm tone nhạc trực tiếp trong trình duyệt với Akapella.">
   <meta name="theme-color" content="#101412">
   <title>Akapella — Tách stem âm thanh</title>
   <link rel="icon" href="/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/studio.css">
   <script type="module" src="/studio.js"></script>
+  <script type="module" src="/youtube.js"></script>
 </head>
 <body>
   <header class="shell masthead">
@@ -20,7 +21,7 @@
       <div>
         <p class="eyebrow">STUDIO / TÁCH STEM</p>
         <h1 id="headline">Tách riêng từng lớp âm thanh.</h1>
-        <p class="intro">Nghe riêng giọng hát, bass và trống. Xuất từng track WAV để luyện tập hoặc đưa vào bản phối của bạn.</p>
+        <p class="intro">Nghe riêng giọng hát, bass và trống. Xuất từng track WAV hoặc kiểm tra BPM và tone của bản nhạc.</p>
       </div>
       <figure class="signal" aria-hidden="true">
         <svg viewBox="0 0 264 100" fill="none">
@@ -45,11 +46,12 @@
                 <span id="formats">MP3, WAV, FLAC, M4A · Tối đa 50 MB và 5 phút</span>
               </label>
             </div>
-            <button class="text-button" id="sample" type="button">Dùng file mẫu 4 giây</button>
-            <label class="select-label" for="mode">Chế độ tách</label>
+            <button class="text-button" id="sample" type="button">Dùng file mẫu 12 giây</button>
+            <label class="select-label" for="mode">Chế độ</label>
             <select id="mode" aria-describedby="model-note">
               <option value="4">4 stem · Giọng, bass, trống, nhạc khác</option>
               <option value="6">6 stem · Thêm guitar và piano</option>
+              <option value="analysis">Tempo &amp; tone · BPM và giọng nhạc</option>
             </select>
             <p id="model-note" class="muted">Model khoảng 166 MB. Âm thanh được xử lý trên thiết bị của bạn.</p>
           </fieldset>
@@ -69,13 +71,34 @@
         <div class="section-heading"><span>02</span><h2 id="results-heading">Kết quả</h2></div>
         <p id="empty" class="empty">Các track sẽ xuất hiện ở đây sau khi tách. Bạn có thể nghe thử hoặc tải từng file WAV.</p>
         <ul id="results" class="tracks" hidden></ul>
+        <div id="analysis" hidden>
+          <dl class="metrics">
+            <div><dt>Tempo</dt><dd id="tempo"></dd><dd id="tempo-note" class="muted"></dd></div>
+            <div><dt>Tone</dt><dd id="key"></dd><dd id="key-note" class="muted"></dd></div>
+          </dl>
+          <p class="muted">Ước tính cho toàn bộ file. Bài đổi nhịp hoặc chuyển giọng có thể cho kết quả không ổn định.</p>
+        </div>
       </section>
     </div>
 
+    <section class="panel youtube" aria-labelledby="youtube-heading" id="youtube">
+      <div class="section-heading"><span>03</span><h2 id="youtube-heading">YouTube → MP3</h2></div>
+      <form id="youtube-form">
+        <label for="youtube-url">Link video YouTube</label>
+        <div class="youtube-controls">
+          <input id="youtube-url" name="url" type="url" required maxlength="2048" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtube-help">
+          <button id="youtube-submit" type="submit">Mở trên máy <span aria-hidden="true">↗</span></button>
+        </div>
+        <p class="muted" id="youtube-help">Chạy <code>python serve.py</code> trên máy trước, rồi mở link tại đó để tải MP3. <a href="https://github.com/doandanh-zah/akapella#tải-mp3-từ-youtube">Hướng dẫn cài đặt</a></p>
+      </form>
+      <p id="youtube-status" role="status"></p>
+      <p id="youtube-error" role="alert" hidden></p>
+      <a id="youtube-download" hidden>Tải lại file MP3</a>
+    </section>
     <aside class="local">
       <div>
-        <h2>Link YouTube, Facebook và hi-hat</h2>
-        <p>Dùng bản CLI trên máy để xử lý link video hoặc tách riêng kick, snare, hi-hat và cymbal.</p>
+        <h2>Tách stem từ link và tách riêng bộ trống</h2>
+        <p>Dùng bản CLI để tách stem từ YouTube, Facebook hoặc xuất riêng kick, snare, hi-hat và cymbal.</p>
       </div>
       <a href="https://github.com/doandanh-zah/akapella#chạy-trên-macos">Hướng dẫn CLI <span aria-hidden="true">↗</span></a>
     </aside>

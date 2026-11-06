@@ -11,6 +11,8 @@ const progress = byId("progress");
 const errorText = byId("error");
 const results = byId("results");
 const empty = byId("empty");
+const analysis = byId("analysis");
+const notes = ["C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
 const labels = {
   vocals: "Giọng hát", bass: "Bass", drums: "Trống", other: "Nhạc khác",
   guitar: "Guitar", piano: "Piano", instrumental: "Bản không lời",
@@ -18,6 +20,7 @@ const labels = {
 const urls = new Set();
 let selection;
 let worker;
+let workerMode;
 let job;
 
 function showError(message = "") {
@@ -28,6 +31,7 @@ function showError(message = "") {
 function select(file) {
   if (!file || job) return;
   selection = file;
+  clearResults();
   byId("source-name").textContent = file.name;
   status.textContent = "";
   showError();
@@ -50,15 +54,27 @@ byId("sample").addEventListener("click", () => {
   select({ name: "akapella-mau.mp3", sample: true });
 });
 mode.addEventListener("change", () => {
+  run.firstChild.textContent = isAnalysis() ? "Phân tích nhạc " : "Tách âm thanh ";
+  empty.textContent = isAnalysis()
+    ? "BPM và tone ước tính sẽ xuất hiện ở đây."
+    : "Các track sẽ xuất hiện ở đây sau khi tách. Bạn có thể nghe thử hoặc tải từng file WAV.";
+  if (isAnalysis()) {
+    byId("model-note").textContent = "Phân tích BPM và giọng nhạc ngay trên thiết bị của bạn.";
+    return;
+  }
   const size = mode.value === "4" ? 166 : 136;
   byId("model-note").textContent = `Model khoảng ${size} MB. Âm thanh được xử lý trên thiết bị của bạn.`;
 });
+
+function isAnalysis() {
+  return mode.value === "analysis";
+}
 
 function finish(message) {
   job = undefined;
   controls.disabled = false;
   run.disabled = !selection;
-  run.firstChild.textContent = "Tách âm thanh ";
+  run.firstChild.textContent = isAnalysis() ? "Phân tích nhạc " : "Tách âm thanh ";
   cancel.hidden = true;
   progress.hidden = true;
   form.removeAttribute("aria-busy");
@@ -68,6 +84,7 @@ function finish(message) {
 function stopWorker() {
   worker?.terminate();
   worker = undefined;
+  workerMode = undefined;
 }
 
 cancel.addEventListener("click", () => {
@@ -102,6 +119,7 @@ function clearResults() {
   for (const url of urls) URL.revokeObjectURL(url);
   urls.clear();
   results.hidden = true;
+  analysis.hidden = true;
   empty.hidden = false;
 }
 
@@ -135,6 +153,19 @@ function showResults(tracks) {
   empty.hidden = true;
 }
 
+function showAnalysis({ tempo, key }) {
+  byId("tempo").textContent = tempo ? `${tempo.bpm} BPM` : "Chưa rõ";
+  byId("tempo-note").textContent = tempo?.alternative
+    ? `Có thể đếm ở ${tempo.alternative} BPM`
+    : tempo ? "" : "Chưa tìm được nhịp lặp ổn định.";
+  byId("key").textContent = key ? `${notes[key.root]} ${key.mode === "major" ? "trưởng" : "thứ"}` : "Chưa rõ";
+  byId("key-note").textContent = key
+    ? key.uncertain ? "Tín hiệu giọng nhạc chưa rõ." : ""
+    : "Cần đoạn có giai điệu hoặc hòa âm rõ.";
+  analysis.hidden = false;
+  empty.hidden = true;
+}
+
 function failed(message) {
   stopWorker();
   finish("");
@@ -154,9 +185,15 @@ function handleWorker({ data }) {
   } else if (data.phase === "done") {
     showResults(data.tracks);
     finish(`Đã tạo ${data.tracks.length} track WAV.`);
+  } else if (data.phase === "analysis") {
+    stopWorker();
+    showAnalysis(data.metrics);
+    finish("Đã phân tích tempo và tone.");
   } else if (data.phase === "error") {
     console.error(data.message);
-    failed("Không thể chạy model. Kiểm tra kết nối rồi thử lại trên trình duyệt máy tính.");
+    failed(isAnalysis()
+      ? "Không thể phân tích file này. Hãy thử lại với file WAV hoặc MP3."
+      : "Không thể chạy model. Kiểm tra kết nối rồi thử lại trên trình duyệt máy tính.");
   }
 }
 
@@ -167,7 +204,7 @@ form.addEventListener("submit", async (event) => {
   job = current;
   controls.disabled = true;
   run.disabled = true;
-  run.firstChild.textContent = "Đang tách… ";
+  run.firstChild.textContent = isAnalysis() ? "Đang phân tích… " : "Đang tách… ";
   cancel.hidden = false;
   form.setAttribute("aria-busy", "true");
   status.textContent = "Đang đọc âm thanh…";
@@ -179,12 +216,15 @@ form.addEventListener("submit", async (event) => {
     const stereo = await decode(selection, current.signal);
     if (job !== current) return;
     clearResults();
+    const task = isAnalysis() ? "analyzer" : "separator";
+    if (workerMode !== task) stopWorker();
     if (!worker) {
-      worker = new Worker("/separator.js", { type: "module" });
+      worker = new Worker(`/${task}.js`, { type: "module" });
+      workerMode = task;
       worker.onmessage = handleWorker;
-      worker.onerror = () => failed("Trình duyệt không khởi động được bộ tách. Hãy tải lại trang.");
+      worker.onerror = () => failed("Trình duyệt không khởi động được tác vụ. Hãy tải lại trang.");
     }
-    status.textContent = "Đang khởi động bộ tách…";
+    status.textContent = isAnalysis() ? "Đang đo nhịp và phân tích giọng nhạc…" : "Đang khởi động bộ tách…";
     worker.postMessage({ stereo, mode: mode.value }, stereo.map((channel) => channel.buffer));
   } catch (error) {
     if (job === current) failed(error.message);
