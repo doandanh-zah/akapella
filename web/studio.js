@@ -26,7 +26,6 @@ const seek = byId("seek");
 const play = byId("play");
 const monitorOriginal = byId("monitor-original");
 const monitorMix = byId("monitor-mix");
-const waveArea = byId("wave-area");
 const wave = document.querySelector("[data-wave]");
 const sampleWave = wave.getAttribute("d");
 const notes = ["C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
@@ -52,7 +51,10 @@ let view = "vocals";
 let completedMode;
 let scrubbing = false;
 let lastMixerState;
+let opened = false;
 const workspace = byId("studio");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const svgNS = "http://www.w3.org/2000/svg";
 const toolLinks = [...document.querySelectorAll("[data-view]")];
 const views = {
   vocals: ["01 / TÁCH ÂM THANH", "Tách giọng|khỏi bản nhạc.", "Lấy giọng hát và bản không lời thành hai track riêng để nghe, phối lại hoặc hát karaoke."],
@@ -88,17 +90,63 @@ function syncView() {
     const [kicker, heading, intro] = views[view];
     const [line, nextLine] = heading.split("|");
     byId("tool-kicker").textContent = kicker;
-    byId("headline").replaceChildren(line, document.createElement("br"), ` ${nextLine}`);
+    setHeadline(byId("headline"), [line, nextLine]);
+    setHeadline(byId("headline-echo"), [line, nextLine]);
     byId("tool-intro").textContent = intro;
   }
   syncWorkspace();
-  if (previous !== view && view !== "youtube" && !audio) {
-    void motion.then((effects) => { if (view === workspace.dataset.view) effects?.revealHero(); });
+  if (previous !== view) {
+    void motion.then((effects) => {
+      if (view !== workspace.dataset.view) return;
+      if (view === "youtube") effects?.revealYoutube(byId("youtube"));
+      else effects?.revealHero();
+    });
+  }
+}
+
+function setHeadline(element, lines) {
+  const parts = lines.map((text) => {
+    const outer = document.createElement("span");
+    const inner = document.createElement("span");
+    outer.className = "line";
+    inner.textContent = text.trim();
+    outer.append(inner);
+    return outer;
+  });
+  element.replaceChildren(parts[0], " ", parts[1]);
+}
+
+// Morph between landing, studio and results where the browser supports it.
+// The DOM update never waits on the animation: if the browser cannot render a
+// frame soon (background tab, busy main thread), it runs directly.
+async function transition(update) {
+  let ran = false;
+  const run = () => {
+    if (ran) return;
+    ran = true;
+    update();
+  };
+  if (!document.startViewTransition || reduceMotion.matches || document.hidden) {
+    run();
+    return;
+  }
+  const change = document.startViewTransition(run);
+  change.ready.catch(() => {});
+  change.finished.catch(() => {});
+  let timer;
+  await Promise.race([
+    change.updateCallbackDone.catch(() => {}),
+    new Promise((resolve) => { timer = setTimeout(resolve, 300); }),
+  ]);
+  clearTimeout(timer);
+  if (!ran) {
+    change.skipTransition();
+    run();
   }
 }
 
 function syncWorkspace() {
-  workspace.toggleAttribute("data-loaded", Boolean(audio));
+  workspace.toggleAttribute("data-loaded", Boolean(audio) || opened);
   workspace.toggleAttribute("data-results", !results.hidden && view !== "tempo");
   byId("source-name").textContent = audio ? "Đổi file" : "Chọn file nhạc";
   byId("player").hidden = !audio;
@@ -148,7 +196,7 @@ function showPosition(seconds) {
     byId("elapsed").textContent = elapsed;
     seek.setAttribute("aria-valuetext", `${elapsed} / ${byId("duration").textContent}`);
   }
-  waveArea.style.setProperty("--played", `${audio ? 100 * seconds / audio.duration : 0}%`);
+  workspace.style.setProperty("--played", `${audio ? 100 * seconds / audio.duration : 0}%`);
 }
 
 function setPressed(button, active) {
@@ -233,20 +281,28 @@ async function select(file) {
   try {
     const decoded = await decode(file, current.controller.signal);
     if (selection !== current) return;
-    audio = decoded;
-    byId("song-name").textContent = file.name;
-    byId("duration").textContent = formatTime(audio.duration);
-    byId("wave-source").textContent = "BÀI ĐANG MỞ";
-    wave.removeAttribute("data-placeholder");
-    for (const attr of ["stroke-dasharray", "stroke-dashoffset", "pathLength"]) wave.removeAttribute(attr);
-    wave.setAttribute("data-loaded", "");
-    wave.setAttribute("d", waveform(audio));
-    seek.max = audio.duration;
-    seek.setAttribute("aria-valuetext", `0:00 / ${formatTime(audio.duration)}`);
-    play.disabled = seek.disabled = monitorOriginal.disabled = false;
-    mixer.setTrack(audio);
-    status.textContent = "";
-    syncWorkspace();
+    const opening = !opened;
+    const open = () => {
+      audio = decoded;
+      opened = true;
+      if (opening) scrollTo({ top: 0 });
+      byId("song-name").textContent = file.name;
+      byId("duration").textContent = formatTime(audio.duration);
+      byId("wave-source").textContent = "BÀI ĐANG MỞ";
+      wave.removeAttribute("data-placeholder");
+      for (const attr of ["stroke-dasharray", "stroke-dashoffset", "pathLength"]) wave.removeAttribute(attr);
+      wave.setAttribute("data-loaded", "");
+      wave.setAttribute("d", waveform(audio));
+      seek.max = audio.duration;
+      seek.setAttribute("aria-valuetext", `0:00 / ${formatTime(audio.duration)}`);
+      play.disabled = seek.disabled = monitorOriginal.disabled = false;
+      mixer.setTrack(audio);
+      status.textContent = "";
+      syncWorkspace();
+    };
+    if (opening) await transition(open);
+    else open();
+    if (selection !== current) return;
     void motion.then((effects) => { if (selection === current) effects?.revealWave(); });
     analyze(audio);
     await cloudConfig;
@@ -271,16 +327,21 @@ source.addEventListener("change", () => {
   source.value = "";
   void select(file);
 });
+function setDragging(active) {
+  if (drop.classList.contains("dragging") === active) return;
+  drop.classList.toggle("dragging", active);
+  void motion.then((effects) => effects?.rippleDrag(active));
+}
 drop.addEventListener("dragover", (event) => {
   event.preventDefault();
-  if (!job) drop.classList.add("dragging");
+  if (!job) setDragging(true);
 });
 drop.addEventListener("dragleave", (event) => {
-  if (!drop.contains(event.relatedTarget)) drop.classList.remove("dragging");
+  if (!drop.contains(event.relatedTarget)) setDragging(false);
 });
 drop.addEventListener("drop", (event) => {
   event.preventDefault();
-  drop.classList.remove("dragging");
+  setDragging(false);
   void select(event.dataTransfer.files[0]);
 });
 byId("sample").addEventListener("click", () => void select({ name: "akapella-mau.mp3", sample: true }));
@@ -410,10 +471,11 @@ function clearResults() {
   empty.hidden = false;
 }
 
-function trackButton(text, description, action) {
+function trackButton(text, description, action, role) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "track-toggle";
+  button.dataset.role = role;
   button.textContent = text;
   button.setAttribute("aria-label", description);
   button.setAttribute("aria-pressed", "false");
@@ -430,6 +492,7 @@ function showResults(files, buffers) {
     if (typeof file !== "string") urls.add(url);
     const item = document.createElement("li");
     item.className = "track";
+    item.dataset.stem = name;
     const index = document.createElement("span");
     index.className = "track-index";
     index.setAttribute("aria-hidden", "true");
@@ -441,12 +504,12 @@ function showResults(files, buffers) {
     if (name === "instrumental") {
       const listen = trackButton("Nghe", "Nghe bản không lời", () => {
         mixer.monitor(lastMixerState.mode === "instrumental" ? "original" : "instrumental");
-      });
+      }, "solo");
       rowButtons.set(name, { listen });
       actions.append(listen);
     } else {
-      const mute = trackButton("Mute", `Mute · ${label}`, () => mixer.mute(name));
-      const solo = trackButton("Solo", `Solo · ${label}`, () => mixer.solo(name));
+      const mute = trackButton("Mute", `Mute · ${label}`, () => mixer.mute(name), "mute");
+      const solo = trackButton("Solo", `Solo · ${label}`, () => mixer.solo(name), "solo");
       rowButtons.set(name, { mute, solo });
       actions.append(mute, solo);
     }
@@ -455,10 +518,28 @@ function showResults(files, buffers) {
     link.href = url;
     link.referrerPolicy = "no-referrer";
     link.download = name + ".wav";
-    link.textContent = "Tải WAV ↓";
+    const verb = document.createElement("span");
+    verb.className = "dl-verb";
+    verb.textContent = "Tải ";
+    link.append(verb, "WAV ↓");
     link.setAttribute("aria-label", `Tải WAV · ${label}`);
     actions.append(link);
-    item.append(index, title, actions);
+    const trace = document.createElement("div");
+    trace.className = "track-wave";
+    trace.style.setProperty("--i", results.children.length);
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 540 144");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const flat = document.createElementNS(svgNS, "line");
+    flat.setAttribute("x1", "0");
+    flat.setAttribute("x2", "540");
+    flat.setAttribute("y1", "72");
+    flat.setAttribute("y2", "72");
+    flat.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.append(flat, document.createElementNS(svgNS, "path"));
+    trace.append(svg);
+    item.append(index, title, trace, actions);
     results.append(item);
   }
   mixer.setStems(buffers);
@@ -470,6 +551,17 @@ function showResults(files, buffers) {
   workspace.toggleAttribute("data-results", view !== "tempo");
   empty.hidden = true;
   void motion.then((effects) => { if (!results.hidden) effects?.revealResults(results.children); });
+}
+
+function drawStemWaves(buffers) {
+  for (const item of results.children) {
+    const buffer = buffers.get(item.dataset.stem);
+    const trace = item.querySelector(".track-wave");
+    if (!buffer || !trace) continue;
+    trace.querySelector("path").setAttribute("d", waveform(buffer, 140));
+    trace.querySelector("line").remove();
+    trace.setAttribute("data-ready", "");
+  }
 }
 
 function clearAnalysis() {
@@ -530,7 +622,8 @@ async function prepareResults(files, mixTracks, readWav, current) {
   const exportTotal = files.size + mixTracks.length;
   try {
     const buffers = new Map();
-    showResults(files, buffers);
+    await transition(() => showResults(files, buffers));
+    if (job !== current) return;
     current.exported = true;
     reportProgress(3, "Đang chuẩn bị mixer…", "Bạn đã có thể tải WAV ở danh sách stem.", files.size, exportTotal);
     try {
@@ -553,6 +646,7 @@ async function prepareResults(files, mixTracks, readWav, current) {
         for (const button of Object.values(buttons)) button.disabled = false;
       }
       mixer.setStems(buffers);
+      drawStemWaves(buffers);
     }
     const message = buffers.size
       ? "Chọn Bản tách hoặc Solo để nghe."
