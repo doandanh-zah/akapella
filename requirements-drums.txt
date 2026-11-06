@@ -1,0 +1,2 @@
+mdxnet-infer @ git+https://github.com/openmirlab/mdxnet-infer.git@cb4779eedeca4f55ba498df8e234e2b5f4b90aaf
+torch==2.8.0; sys_platform == 'darwin' and platform_machine == 'arm64'
