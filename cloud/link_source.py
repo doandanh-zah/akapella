@@ -17,6 +17,54 @@ MAX_SECONDS = 300
 _active = None
 
 
+class SourceError(ValueError):
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.code = code
+
+
+def download_error(error, url):
+    message = str(error).lower()
+    host = (urlsplit(url).hostname or "").lower()
+    platform = "YouTube" if host in ("youtu.be", "youtube.com") or host.endswith(".youtube.com") else "Nền tảng"
+    if "429" in message or "too many requests" in message:
+        return SourceError(
+            f"{platform} đang giới hạn truy cập từ máy chủ Akapella (HTTP 429). Hãy thử lại sau.",
+            "source_rate_limited",
+        )
+    if "confirm" in message and ("not a bot" in message or "you're not a bot" in message):
+        return SourceError(
+            f"{platform} yêu cầu máy chủ Akapella xác minh chống bot. Máy chủ hiện chưa tải được âm thanh từ video này.",
+            "source_bot_check",
+        )
+    if any(text in message for text in ("private video", "members-only", "confirm your age", "login required", "sign in")):
+        return SourceError(
+            "Nguồn này yêu cầu đăng nhập hoặc quyền xem riêng. Hãy chọn nguồn có thể truy cập trực tiếp.",
+            "source_access_required",
+        )
+    if any(text in message for text in ("not available in your country", "geo-restricted", "geographic restriction")):
+        return SourceError(
+            "Video bị giới hạn khu vực đối với máy chủ Akapella.",
+            "source_geo_restricted",
+        )
+    if "requested format is not available" in message:
+        return SourceError(
+            "Nền tảng chưa cung cấp luồng âm thanh có thể tải cho máy chủ Akapella.",
+            "source_format_unavailable",
+        )
+    if any(text in message for text in ("timed out", "timeout")):
+        return SourceError(
+            "Nền tảng phản hồi quá lâu khi máy chủ lấy âm thanh. Hãy thử lại sau.",
+            "source_timeout",
+        )
+    if any(text in message for text in ("video unavailable", "video is unavailable", "has been removed", "does not exist")):
+        return SourceError("Nền tảng báo video không còn khả dụng.", "source_unavailable")
+    return SourceError(
+        "Máy chủ chưa lấy được âm thanh từ nền tảng này. Hãy thử lại sau hoặc chọn nguồn khác.",
+        "source_download_failed",
+    )
+
+
 def validate_url(value):
     try:
         parsed = urlsplit(value)
@@ -56,7 +104,7 @@ def fetch_source(url, directory, on_progress):
         for line in child.stdout:
             event = json.loads(line)
             if event["stage"] == "failed":
-                raise ValueError(event["message"])
+                raise SourceError(event["message"], event.get("code", "source_download_failed"))
             if event["stage"] == "downloaded":
                 result = event
             else:
@@ -143,8 +191,9 @@ def download(url, directory):
             if len(files) != 1 or files[0].stat().st_size > MAX_BYTES:
                 raise ValueError("Không tải được một nguồn âm thanh hợp lệ trong giới hạn 50 MB.")
             emit(stage="downloaded", file=files[0].name, title=title)
-    except DownloadError:
-        emit(stage="failed", message="Không lấy được âm thanh từ link. Hãy kiểm tra video công khai. Nền tảng có thể chặn máy chủ hoặc yêu cầu đăng nhập.")
+    except DownloadError as exc:
+        error = download_error(exc, url)
+        emit(stage="failed", message=str(error), code=error.code)
         return 1
     except ValueError as exc:
         emit(stage="failed", message=str(exc))

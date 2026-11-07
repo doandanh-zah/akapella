@@ -14,6 +14,16 @@ export function publicMediaUrl(value) {
       /(?:^|\.)(?:localhost|local|internal|test|lan)$/.test(host) || host.endsWith(".home.arpa")) {
     throw new Error("Nhập link HTTPS công khai hợp lệ.");
   }
+  if (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "www.youtube-nocookie.com"].includes(host)) {
+    const parts = url.pathname.split("/").filter(Boolean);
+    const video = host === "youtu.be" ? parts[0]
+      : url.pathname === "/watch" ? url.searchParams.get("v")
+        : ["shorts", "live", "embed"].includes(parts[0]) ? parts[1] : undefined;
+    if (!/^[A-Za-z0-9_-]{11}$/.test(video ?? "")) {
+      throw new Error("Dán link đến một video YouTube cụ thể.");
+    }
+    return `https://www.youtube.com/watch?v=${video}`;
+  }
   url.hash = "";
   return url.href;
 }

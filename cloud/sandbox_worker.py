@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 import soundfile as sf
 
 from engine import RATE, read_audio, split
-from link_source import cancel_download, fetch_source
+from link_source import SourceError, cancel_download, fetch_source
 from vocals import isolate
 
 
@@ -95,6 +95,8 @@ def process():
         except (OSError, RuntimeError):
             previews = False
         update("done", tracks=list(tracks), previews=previews)
+    except SourceError as exc:
+        update("failed", message=str(exc), code=exc.code)
     except ValueError as exc:
         update("failed", message=str(exc))
     except Exception:

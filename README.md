@@ -43,7 +43,9 @@ Dùng thư mục đầu ra mới cho mỗi lần chạy. Chế độ mặc đị
 
 Chọn **Tách giọng** hoặc **4–6 stem**, chuyển nguồn sang **Dán link**, nhập URL HTTPS công khai rồi bấm **Lấy âm thanh & tách**. Máy chủ tải một nguồn tối đa 50 MB và 5 phút, sau đó xuất stem vào cùng mixer với luồng tải file. Bản gốc được tải về trình duyệt để nghe đối chiếu và tính BPM/tone.
 
-Luồng web dùng yt-dlp trên máy chủ với thời hạn tải 100 giây. YouTube và Facebook có thể chặn IP trung tâm dữ liệu hoặc yêu cầu đăng nhập. Khi gặp trường hợp đó, studio báo lỗi và cho phép sửa link hoặc chọn file. Lần kiểm tra Vercel gần nhất xác nhận link âm thanh HTTPS trực tiếp hoạt động, còn video YouTube thử nghiệm bị yêu cầu xác minh chống bot. [Hỗ trợ và giới hạn của yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ)
+Link YouTube kèm Radio hoặc playlist được chuẩn hóa về video đang chọn.
+
+Luồng web dùng yt-dlp trên máy chủ với thời hạn tải 100 giây. YouTube và Facebook có thể chặn IP trung tâm dữ liệu hoặc yêu cầu đăng nhập. Khi gặp trường hợp đó, studio phân biệt lỗi giới hạn truy cập (HTTP 429), xác minh chống bot, yêu cầu quyền xem, giới hạn khu vực và thiếu luồng tải. Trạng thái job kèm mã lỗi tương ứng. Video công khai và ngắn vẫn có thể bị chặn khi máy chủ lấy nguồn. Lần kiểm tra Vercel gần nhất xác nhận link âm thanh HTTPS trực tiếp hoạt động, còn video YouTube thử nghiệm bị yêu cầu xác minh chống bot. [Hỗ trợ và giới hạn của yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ)
 
 ## Tách riêng hi-hat và từng phần của bộ trống
 
