@@ -2,6 +2,7 @@
 
 import json
 import ipaddress
+import math
 import os
 from pathlib import Path
 import signal
@@ -10,6 +11,8 @@ import subprocess
 import sys
 from threading import Timer
 import time
+import urllib.error
+import urllib.request
 from urllib.parse import urlsplit
 
 MAX_BYTES = 50_000_000
@@ -127,6 +130,85 @@ def emit(**event):
     print(json.dumps(event), flush=True)
 
 
+def fetch_youtube_api(url, directory, key, on_progress):
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_args, **_kwargs):
+            return None
+
+    opener = urllib.request.build_opener(NoRedirect())
+
+    def request_api(endpoint, body=None):
+        request = urllib.request.Request(
+            "https://api.fastsaver.io/v1/" + endpoint,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json", "Accept": "application/json", "X-Api-Key": key},
+        )
+        status = 200
+        try:
+            response = opener.open(request, timeout=35)
+        except urllib.error.HTTPError as exc:
+            status = exc.code
+            response = exc
+        except (urllib.error.URLError, TimeoutError):
+            raise SourceError("Dịch vụ lấy nguồn YouTube chưa phản hồi. Hãy thử lại sau.", "source_provider_unavailable") from None
+        with response:
+            try:
+                payload = json.loads(response.read(1_000_001))
+            except (ValueError, UnicodeError):
+                raise SourceError("Dịch vụ lấy nguồn YouTube trả về dữ liệu không hợp lệ.", "source_provider_invalid") from None
+        if not isinstance(payload, dict):
+            raise SourceError("Dịch vụ lấy nguồn YouTube trả về dữ liệu không hợp lệ.", "source_provider_invalid")
+        if status != 200 or payload.get("ok") is not True:
+            detail = str(payload.get("detail", "")).lower()
+            if "insufficient credit" in detail:
+                raise SourceError("Hạn mức miễn phí lấy nguồn YouTube đã hết. Bạn có thể chọn file để tách.", "source_quota_exhausted")
+            if status == 429:
+                raise SourceError("Dịch vụ lấy nguồn YouTube đang giới hạn lượt. Hãy thử lại sau.", "source_provider_rate_limited")
+            if status in (401, 403):
+                raise SourceError("Kết nối dịch vụ lấy nguồn YouTube chưa được xác thực.", "source_provider_auth")
+            raise SourceError("Dịch vụ chưa lấy được âm thanh của video YouTube này.", "source_provider_unavailable")
+        return payload
+
+    account = request_api("balance")
+    if str(account.get("plan", "")).lower() != "free":
+        raise SourceError("Tính năng này yêu cầu tài khoản lấy nguồn ở gói Free.", "source_free_plan_required")
+    credits = account.get("credits")
+    if not isinstance(credits, (int, float)) or not math.isfinite(credits) or credits < 15:
+        raise SourceError("Hạn mức miễn phí lấy nguồn YouTube đã hết. Bạn có thể chọn file để tách.", "source_quota_exhausted")
+    payload = request_api("youtube/download", {"url": url, "format": "audio"})
+    duration = payload.get("duration")
+    if duration is not None and (not isinstance(duration, (int, float)) or not 0 < duration <= MAX_SECONDS):
+        raise SourceError("Nguồn âm thanh phải dài tối đa 5 phút.", "source_too_long")
+    source_url = payload.get("download_url")
+    try:
+        validate_url(source_url)
+    except ValueError:
+        raise SourceError("Dịch vụ trả về đường dẫn âm thanh không hợp lệ.", "source_provider_invalid") from None
+    title = str(payload.get("filename") or "Âm thanh từ YouTube").strip()[:160]
+    if title.lower().endswith(".mp3"):
+        title = title[:-4]
+    on_progress({"status": "downloading", "downloaded_bytes": 0, "title": title})
+    path = directory / "download.mp3"
+    try:
+        with urllib.request.urlopen(source_url, timeout=30) as source, path.open("wb") as output:
+            total = source.headers.get("Content-Length")
+            total = int(total) if total and total.isdigit() else None
+            if total is not None and total > MAX_BYTES:
+                raise SourceError("Nguồn âm thanh vượt quá 50 MB.", "source_too_large")
+            done = 0
+            while chunk := source.read(65536):
+                done += len(chunk)
+                if done > MAX_BYTES:
+                    raise SourceError("Nguồn âm thanh vượt quá 50 MB.", "source_too_large")
+                output.write(chunk)
+                on_progress({"status": "downloading", "downloaded_bytes": done, "total_bytes": total})
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise SourceError("Quá trình lấy âm thanh YouTube bị gián đoạn. Hãy thử lại sau.", "source_provider_unavailable") from None
+    if done == 0 or total is not None and done != total:
+        raise SourceError("Dịch vụ chưa trả về file âm thanh đầy đủ.", "source_provider_incomplete")
+    return path, title
+
+
 def download(url, directory):
     from yt_dlp import YoutubeDL
     from yt_dlp.utils import DownloadError
@@ -157,7 +239,7 @@ def download(url, directory):
             raise ValueError("Nguồn âm thanh vượt quá 50 MB.")
         now = time.monotonic()
         if now - last >= 0.5 or event["status"] == "finished":
-            emit(stage="download", done=done, total=event.get("total_bytes"))
+            emit(stage="download", done=done, total=event.get("total_bytes"), **({"title": event["title"]} if event.get("title") else {}))
             last = now
 
     options = {
@@ -174,6 +256,12 @@ def download(url, directory):
         "writethumbnail": False, "writesubtitles": False, "writeinfojson": False,
     }
     try:
+        key = os.environ.get("FASTSAVER_API_KEY")
+        host = (urlsplit(url).hostname or "").lower()
+        if key and (host in ("youtube.com", "youtu.be") or host.endswith(".youtube.com")):
+            source, title = fetch_youtube_api(validate_url(url), directory, key, progress)
+            emit(stage="downloaded", file=source.name, title=title)
+            return 0
         with YoutubeDL(options) as downloader:
             info = downloader.extract_info(validate_url(url), download=False)
             if not info or info.get("_type") in ("playlist", "multi_video"):
@@ -196,7 +284,7 @@ def download(url, directory):
         emit(stage="failed", message=str(error), code=error.code)
         return 1
     except ValueError as exc:
-        emit(stage="failed", message=str(exc))
+        emit(stage="failed", message=str(exc), code=getattr(exc, "code", "source_invalid"))
         return 1
     return 0
 

@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     AKAPELLA_SANDBOX_SNAPSHOT: snapshot, VERCEL_URL: deployment,
     VERCEL_BRANCH_URL: branch, AKAPELLA_RATE_KEY: rateKey,
     AKAPELLA_SANDBOX_REGION: region, AKAPELLA_SANDBOX_VOCALS: vocals,
-    AKAPELLA_SANDBOX_LINKS: linkSupport } = process.env;
+    AKAPELLA_SANDBOX_LINKS: linkSupport, AKAPELLA_FASTSAVER_KEY: downloaderKey } = process.env;
   const validCode = code?.length >= 20;
   const publicSandbox = Boolean(snapshot && rateKey?.length >= 32);
   const sandboxEnabled = Boolean(snapshot && (publicSandbox || validCode));
@@ -71,7 +71,8 @@ export default async function handler(req, res) {
       name = `akapella-${digest}`;
     }
     try {
-      return res.status(200).json(await createSandboxJob(snapshot, size ?? 0, mode, origin, name, region, mediaUrl));
+      const youtubeKey = mediaUrl && new URL(mediaUrl).hostname === "www.youtube.com" ? downloaderKey : undefined;
+      return res.status(200).json(await createSandboxJob(snapshot, size ?? 0, mode, origin, name, region, mediaUrl, youtubeKey));
     } catch (error) {
       const status = error.response?.status ?? error.status;
       const conflict = status === 400 && error.json?.error?.message?.includes(`with the name '${name}' already exists`);

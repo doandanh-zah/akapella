@@ -8,7 +8,7 @@ const directory = "/vercel/akapella";
 const port = 3000;
 const files = ["engine.py", "sandbox_worker.py", "vocals.py", "link_source.py"];
 
-export async function createSandboxJob(snapshotId, size, mode, origin, name, region, sourceUrl) {
+export async function createSandboxJob(snapshotId, size, mode, origin, name, region, sourceUrl, downloaderKey) {
   const job = randomBytes(24).toString("hex");
   const source = await Promise.all(files.map(async (name) => ({
     path: `${directory}/${name}`,
@@ -36,6 +36,7 @@ export async function createSandboxJob(snapshotId, size, mode, origin, name, reg
       env: {
         JOB_ACCESS: job, JOB_SIZE: String(size), JOB_MODE: String(mode), JOB_ORIGIN: origin,
         ...(sourceUrl && { JOB_URL: sourceUrl }),
+        ...(sourceUrl && downloaderKey && { FASTSAVER_API_KEY: downloaderKey }),
         PATH: `${directory}/.venv/bin:/usr/local/bin:/usr/bin:/bin`,
         OPENBLAS_NUM_THREADS: "1",
         OMP_NUM_THREADS: "4",
