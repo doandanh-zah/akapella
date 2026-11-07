@@ -6,7 +6,6 @@ const hero = document.querySelector(".hero");
 let entrance;
 let results;
 let mode;
-let youtubeIntro;
 
 // Content must never stay hidden: if frames stop (background tab, throttled
 // pane), finish the entrance on a timer instead of waiting for rAF.
@@ -38,14 +37,6 @@ export function revealWave() {
   });
 }
 
-export function revealYoutube(element) {
-  youtubeIntro?.revert();
-  if (reduceMotion.matches) return;
-  youtubeIntro = settle(animate(element.querySelectorAll(".youtube-intro > *, .youtube-body"), {
-    opacity: [0, 1], y: [20, 0], duration: 600, delay: stagger(70), ease: "out(4)",
-  }), 1400);
-}
-
 export function revealResults(elements) {
   resetResultsMotion();
   if (reduceMotion.matches) return;
@@ -74,7 +65,6 @@ function resetWave() {
 function resetMotion() {
   entrance?.revert();
   resetWave();
-  youtubeIntro?.revert();
   mode?.revert();
   resetResultsMotion();
 }

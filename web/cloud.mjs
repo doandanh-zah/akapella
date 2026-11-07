@@ -69,16 +69,21 @@ function pause(signal) {
   });
 }
 
-export async function splitInCloud(file, mode, pilotCode, onProgress, signal) {
+export async function splitInCloud(source, mode, pilotCode, onProgress, signal, onSource) {
   let job;
   let worker;
+  let sourceTask;
   let completed = false;
   try {
-    const created = await request("create", { size: file.size, mode, pilotCode }, signal);
+    const fromLink = typeof source === "string";
+    const input = fromLink ? { sourceUrl: source } : { size: source.size };
+    const created = await request("create", { ...input, mode, pilotCode }, signal);
     job = created.job;
     worker = created.worker;
-    onProgress({ stage: "upload", done: 0, total: file.size });
-    await uploadFile(created.upload, file, onProgress, signal);
+    if (!fromLink) {
+      onProgress({ stage: "upload", done: 0, total: source.size });
+      await uploadFile(created.upload, source, onProgress, signal);
+    }
     onProgress({ stage: "queued" });
     await request("start", { job }, signal, worker);
 
@@ -95,7 +100,16 @@ export async function splitInCloud(file, mode, pilotCode, onProgress, signal) {
         if (signal.aborted || ++failures >= 3) throw error;
         continue;
       }
+      if (worker && current.source && onSource && !sourceTask) {
+        sourceTask = onSource({
+          ...current.source,
+          preview: new URL("original.flac", worker).href,
+          url: new URL("original.wav", worker).href,
+        });
+      }
       if (current.stage === "done") {
+        await sourceTask;
+        signal.throwIfAborted();
         completed = true;
         return worker ? current.tracks.map(name => ({
           name, url: new URL(`tracks/${name}.wav`, worker).href,

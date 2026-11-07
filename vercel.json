@@ -15,7 +15,7 @@
   ],
   "functions": {
     "api/cloud.mjs": {
-      "includeFiles": "cloud/{engine,sandbox_worker,vocals}.py",
+      "includeFiles": "cloud/{engine,sandbox_worker,vocals,link_source}.py",
       "maxDuration": 60
     }
   }

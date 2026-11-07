@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import soundfile as sf
 
 from engine import RATE, read_audio, split
+from link_source import cancel_download, fetch_source
 from vocals import isolate
 
 
@@ -21,12 +22,14 @@ ACCESS = os.environ["JOB_ACCESS"]
 ORIGIN = os.environ["JOB_ORIGIN"]
 SIZE = int(os.environ["JOB_SIZE"])
 MODE = int(os.environ["JOB_MODE"])
+SOURCE_URL = os.environ.get("JOB_URL")
 WEIGHTS = Path(__file__).resolve().parent / "weights"
 WORK = Path(tempfile.mkdtemp(prefix="akapella-"))
 SOURCE = WORK / "input"
 STATE_LOCK = Lock()
-state = {"stage": "upload"}
+state = {"stage": "created" if SOURCE_URL else "upload"}
 tracks = {}
+original = None
 
 
 def update(stage, **details):
@@ -51,11 +54,23 @@ def progress(stage, done, total):
 
 
 def process():
+    global original
     try:
+        source = SOURCE
+        name = None
+        if SOURCE_URL:
+            update("extract")
+            source, name = fetch_source(
+                SOURCE_URL, WORK, lambda event: update(event["stage"], **{key: value for key, value in event.items() if key != "stage"}),
+            )
         update("prepare")
-        stereo = read_audio(SOURCE, WORK)
-        SOURCE.unlink()
+        stereo = read_audio(source, WORK)
+        source.unlink()
         (WORK / "normalized.wav").unlink()
+        if SOURCE_URL:
+            sf.write(WORK / "original.wav", stereo.T, RATE, subtype="PCM_16")
+            sf.write(WORK / "original.flac", stereo.T, RATE, subtype="PCM_16")
+            original = {"name": name, "duration": stereo.shape[1] / RATE}
         session = model.result()
         if MODE == 2:
             vocals = isolate(session, stereo, progress)
@@ -87,6 +102,7 @@ def process():
         raise
     finally:
         if state["stage"] != "done":
+            original = None
             shutil.rmtree(WORK, ignore_errors=True)
 
 
@@ -130,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_headers(204 if self.route() else 404, "text/plain", 0)
 
     def do_PUT(self):
-        if self.route() != "upload":
+        if self.route() != "upload" or SOURCE_URL:
             return self.reply({}, 404)
         if self.headers.get("Content-Length") != str(SIZE) or self.headers.get("If-None-Match") != "*":
             return self.reply({}, 400)
@@ -162,11 +178,12 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 self.reply({"stage": "cancelled"})
             finally:
+                cancel_download()
                 shutil.rmtree(WORK, ignore_errors=True)
                 Timer(0.1, os._exit, args=(0,)).start()
         elif route == "start":
             with STATE_LOCK:
-                if state["stage"] == "uploaded":
+                if state["stage"] in ("uploaded", "created"):
                     state["stage"] = "queued"
                     Thread(target=process, daemon=True).start()
                 stage = state["stage"]
@@ -179,22 +196,26 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self.route()
         if route in ("ready", "status"):
-            return self.reply(state.copy())
+            return self.reply({**state, **({"source": original} if original else {})})
+        if route in ("original.wav", "original.flac") and original:
+            return self.send_audio(WORK / route)
         if route and route.startswith("tracks/") and state["stage"] in ("preview", "done"):
             name, _, extension = route.removeprefix("tracks/").rpartition(".")
             path = tracks.get(name) if extension in ("wav", "flac") else None
             if path and extension == "flac":
                 path = path.with_suffix(".flac") if state.get("previews") else None
             if path:
-                try:
-                    file = path.open("rb")
-                except FileNotFoundError:
-                    return self.reply({}, 404)
-                with file:
-                    self.send_headers(200, f"audio/{extension}", os.fstat(file.fileno()).st_size, path.name)
-                    shutil.copyfileobj(file, self.wfile)
-                return
+                return self.send_audio(path)
         self.reply({}, 404)
+
+    def send_audio(self, path):
+        try:
+            file = path.open("rb")
+        except FileNotFoundError:
+            return self.reply({}, 404)
+        with file:
+            self.send_headers(200, f"audio/{path.suffix[1:]}", os.fstat(file.fileno()).st_size, path.name)
+            shutil.copyfileobj(file, self.wfile)
 
 
 if __name__ == "__main__":

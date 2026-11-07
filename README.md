@@ -14,7 +14,7 @@ Khi tự chạy bản web cục bộ mà chưa cấu hình máy chủ, Web Worke
 
 BPM và giọng trưởng/thứ được ước tính ngay khi mở bài, kể cả khi bạn chỉ muốn phân tích mà chưa tách stem. Kết quả thể hiện nhịp và giọng chính của toàn file. Bản nhạc đổi nhịp, chuyển giọng hoặc chỉ có tiếng trống có thể cho kết quả chưa rõ. [Phương pháp ước tính BPM](https://labrosa.ee.columbia.edu/~dpwe/resources/matlab/beat_simple/) · [Phương pháp ước tính giọng](https://music21.org/music21docs/moduleReference/moduleAnalysisDiscrete.html)
 
-Để tách stem từ link YouTube, Facebook hoặc tách từng phần bộ trống như hi-hat, dùng bản CLI dưới đây.
+Trong studio, chọn **File nhạc** để tải file lên hoặc **Dán link** để máy chủ tự lấy âm thanh rồi tách theo chế độ đang chọn. Để tách riêng hi-hat và các thành phần bộ trống, dùng CLI dưới đây.
 
 ## Chạy trên macOS
 
@@ -39,16 +39,11 @@ python akapella.py "bai-hat.flac" -o stems/sau-stem --stems 6
 
 Dùng thư mục đầu ra mới cho mỗi lần chạy. Chế độ mặc định xuất `vocals.wav`, `bass.wav`, `drums.wav` và `other.wav`. `instrumental.wav` là bản cộng các stem ngoài giọng hát. Với `--stems 6`, bản không lời cũng bao gồm guitar và piano. Các WAV đều là stereo 44,1 kHz và bắt đầu cùng mốc thời gian để đưa vào DAW.
 
-## Tải MP3 từ YouTube
+## Tách âm thanh từ link trên web
 
-Cài môi trường Python và FFmpeg theo hướng dẫn trên, sau đó chạy trong thư mục repo:
+Chọn **Tách giọng** hoặc **4–6 stem**, chuyển nguồn sang **Dán link**, nhập URL HTTPS công khai rồi bấm **Lấy âm thanh & tách**. Máy chủ tải một nguồn tối đa 50 MB và 5 phút, sau đó xuất stem vào cùng mixer với luồng tải file. Bản gốc được tải về trình duyệt để nghe đối chiếu và tính BPM/tone.
 
-```bash
-source .venv/bin/activate
-python serve.py
-```
-
-Mở [Akapella trên máy](http://127.0.0.1:8765/#youtube), dán link và chọn **Tải MP3**. Akapella xuất MP3 192 kbps từ video công khai dài tối đa 20 phút. Trang Vercel chuyển link đã nhập sang trang trên máy. Quá trình lấy video và đổi sang MP3 chạy bằng yt-dlp và FFmpeg trên máy của bạn. [Hỗ trợ YouTube của yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/EJS)
+Luồng web dùng yt-dlp trên máy chủ với thời hạn tải 100 giây. YouTube và Facebook có thể chặn IP trung tâm dữ liệu hoặc yêu cầu đăng nhập. Khi gặp trường hợp đó, studio báo lỗi và cho phép sửa link hoặc chọn file. Lần kiểm tra Vercel gần nhất xác nhận link âm thanh HTTPS trực tiếp hoạt động, còn video YouTube thử nghiệm bị yêu cầu xác minh chống bot. [Hỗ trợ và giới hạn của yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ)
 
 ## Tách riêng hi-hat và từng phần của bộ trống
 
@@ -68,7 +63,7 @@ DrumSep chạy thêm trên `drums.wav` và xuất `kick.wav`, `snare.wav`, `toms
 
 ## Máy chủ tách stem trên Vercel
 
-Chạy `AKAPELLA_SANDBOX_REGION=sin1 sh cloud/provision-sandbox.sh` từ repo đã liên kết với Vercel để tạo snapshot Python, FFmpeg, HTDemucs 4/6 stem và KUIELab MDX-Net. Script xác minh SHA-256 của từng model. Đặt ID snapshot vào `AKAPELLA_SANDBOX_SNAPSHOT`, vùng snapshot vào `AKAPELLA_SANDBOX_REGION` và `AKAPELLA_SANDBOX_VOCALS=1` để bật tách giọng hai track. Bật Vercel OIDC. [KUIELab MDX-Net, mã nguồn và trọng số](https://github.com/kuielab/mdx-net-submission/tree/18014d705e18f222e53c7d049a0994a27c1c41be) Mỗi lượt tách chạy trong một sandbox 4 vCPU với thời hạn 15 phút và mạng đi ra bị chặn. Gateway chuyển trình duyệt sang URL riêng của job để tải file và WAV trực tiếp.
+Chạy `AKAPELLA_SANDBOX_REGION=sin1 sh cloud/provision-sandbox.sh` từ repo đã liên kết với Vercel để tạo snapshot Python, FFmpeg, HTDemucs 4/6 stem và KUIELab MDX-Net. Script xác minh SHA-256 của từng model. Đặt ID snapshot vào `AKAPELLA_SANDBOX_SNAPSHOT`, vùng snapshot vào `AKAPELLA_SANDBOX_REGION` và `AKAPELLA_SANDBOX_VOCALS=1` để bật tách giọng hai track. Đặt `AKAPELLA_SANDBOX_LINKS=1` với snapshot đã cài yt-dlp để bật nguồn link. Bật Vercel OIDC. [KUIELab MDX-Net, mã nguồn và trọng số](https://github.com/kuielab/mdx-net-submission/tree/18014d705e18f222e53c7d049a0994a27c1c41be) Mỗi lượt tách chạy trong một sandbox 4 vCPU với thời hạn 15 phút với mạng đi ra bị chặn cho job tải file. Job từ link chỉ được truy cập địa chỉ công khai, có kiểm tra DNS và chặn các dải địa chỉ nội bộ. Gateway chuyển trình duyệt sang URL riêng của job để tải file và WAV trực tiếp.
 
 Đặt secret ngẫu nhiên `AKAPELLA_RATE_KEY` dài ít nhất 32 ký tự cho bản công khai. Gateway giới hạn mỗi IP tối đa một job trong mỗi cửa sổ 20 giây và lưu mã HMAC của IP và cửa sổ trong tên sandbox. Môi trường thử nghiệm có thể dùng `AKAPELLA_PILOT_CODE` dài ít nhất 20 ký tự nếu chưa đặt rate key. Gói Hobby dừng tạo sandbox khi dùng hết hạn mức của tài khoản. [Vercel Sandbox](https://vercel.com/docs/sandbox) · [Hạn mức Sandbox](https://vercel.com/docs/sandbox/pricing)
 

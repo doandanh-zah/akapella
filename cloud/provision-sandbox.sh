@@ -12,7 +12,7 @@ npx --yes vercel sandbox exec "$sandbox_name" -- bash -lc "$(cat <<'BOOTSTRAP'
 set -eu
 cd /vercel/akapella
 uv venv --python 3.12
-uv pip install --python .venv/bin/python onnxruntime==1.22.0 numpy==2.4.2 soundfile==0.13.1 imageio-ffmpeg==0.6.0
+uv pip install --python .venv/bin/python onnxruntime==1.22.0 numpy==2.4.2 soundfile==0.13.1 imageio-ffmpeg==0.6.0 'yt-dlp[default]==2026.10.26'
 ffmpeg=$(.venv/bin/python -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')
 ln -s "$ffmpeg" .venv/bin/ffmpeg
 .venv/bin/python - <<'PY'

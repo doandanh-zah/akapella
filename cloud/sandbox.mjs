@@ -2,12 +2,13 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { setTimeout as pause } from "node:timers/promises";
 import { Sandbox } from "@vercel/sandbox";
+import { mediaNetworkPolicy } from "./source.mjs";
 
 const directory = "/vercel/akapella";
 const port = 3000;
-const files = ["engine.py", "sandbox_worker.py", "vocals.py"];
+const files = ["engine.py", "sandbox_worker.py", "vocals.py", "link_source.py"];
 
-export async function createSandboxJob(snapshotId, size, mode, origin, name, region) {
+export async function createSandboxJob(snapshotId, size, mode, origin, name, region, sourceUrl) {
   const job = randomBytes(24).toString("hex");
   const source = await Promise.all(files.map(async (name) => ({
     path: `${directory}/${name}`,
@@ -21,7 +22,7 @@ export async function createSandboxJob(snapshotId, size, mode, origin, name, reg
     resources: { vcpus: 4 },
     timeout: 15 * 60_000,
     persistent: false,
-    networkPolicy: "deny-all",
+    networkPolicy: sourceUrl ? mediaNetworkPolicy : "deny-all",
     tags: { workload: "akapella-stems" },
     signal: AbortSignal.timeout(18_000),
   });
@@ -34,6 +35,7 @@ export async function createSandboxJob(snapshotId, size, mode, origin, name, reg
       signal: AbortSignal.timeout(8000),
       env: {
         JOB_ACCESS: job, JOB_SIZE: String(size), JOB_MODE: String(mode), JOB_ORIGIN: origin,
+        ...(sourceUrl && { JOB_URL: sourceUrl }),
         PATH: `${directory}/.venv/bin:/usr/local/bin:/usr/bin:/bin`,
         OPENBLAS_NUM_THREADS: "1",
         OMP_NUM_THREADS: "4",
@@ -42,7 +44,7 @@ export async function createSandboxJob(snapshotId, size, mode, origin, name, reg
     const worker = `${sandbox.domain(port)}/${job}/`;
     for (let attempt = 0; attempt < 8; attempt++) {
       const response = await fetch(`${worker}ready`, { signal: AbortSignal.timeout(1500) }).catch(() => null);
-      if (response?.ok) return { job, worker, upload: `${worker}upload` };
+      if (response?.ok) return { job, worker, ...(sourceUrl ? {} : { upload: `${worker}upload` }) };
       await response?.body?.cancel();
       await pause(350);
     }

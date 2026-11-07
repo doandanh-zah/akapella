@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 import { createSandboxJob } from "../cloud/sandbox.mjs";
+import { publicMediaUrl } from "../cloud/source.mjs";
 
 const actions = new Set(["create", "start", "status", "cancel"]);
 
@@ -16,7 +17,8 @@ export default async function handler(req, res) {
     AKAPELLA_MODAL_SECRET: secret, AKAPELLA_PILOT_CODE: code,
     AKAPELLA_SANDBOX_SNAPSHOT: snapshot, VERCEL_URL: deployment,
     VERCEL_BRANCH_URL: branch, AKAPELLA_RATE_KEY: rateKey,
-    AKAPELLA_SANDBOX_REGION: region, AKAPELLA_SANDBOX_VOCALS: vocals } = process.env;
+    AKAPELLA_SANDBOX_REGION: region, AKAPELLA_SANDBOX_VOCALS: vocals,
+    AKAPELLA_SANDBOX_LINKS: linkSupport } = process.env;
   const validCode = code?.length >= 20;
   const publicSandbox = Boolean(snapshot && rateKey?.length >= 32);
   const sandboxEnabled = Boolean(snapshot && (publicSandbox || validCode));
@@ -25,14 +27,15 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
 
   const modes = sandboxEnabled && vocals === "1" ? [2, 4, 6] : [4, 6];
-  if (req.method === "GET") return res.status(200).json({ enabled, requiresCode, modes });
+  const links = sandboxEnabled && linkSupport === "1";
+  if (req.method === "GET") return res.status(200).json({ enabled, requiresCode, modes, links });
   if (req.method !== "POST") return res.status(405).json({ error: "Phương thức không được hỗ trợ." });
   if (!enabled) return res.status(503).json({ error: "Máy chủ tách stem chưa mở." });
   if (!req.headers["content-type"]?.startsWith("application/json")) {
     return res.status(415).json({ error: "Yêu cầu không hợp lệ." });
   }
 
-  const { action, job, size, mode, pilotCode } = req.body ?? {};
+  const { action, job, size, mode, pilotCode, sourceUrl } = req.body ?? {};
   if (action === "create" && requiresCode && !matches(pilotCode, code)) {
     return res.status(403).json({ error: "Mã truy cập không đúng." });
   }
@@ -40,7 +43,17 @@ export default async function handler(req, res) {
     if (action !== "create" || req.headers["x-akapella-create"] !== "1") {
       return res.status(400).json({ error: "Yêu cầu không hợp lệ." });
     }
-    if (!Number.isInteger(size) || size < 1 || size > 50_000_000 || !modes.includes(mode)) {
+    let mediaUrl;
+    if (sourceUrl !== undefined) {
+      if (!links) return res.status(503).json({ error: "Máy chủ lấy âm thanh từ link chưa sẵn sàng." });
+      if (size !== undefined) return res.status(400).json({ error: "Chọn một nguồn âm thanh." });
+      try {
+        mediaUrl = publicMediaUrl(sourceUrl);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+    }
+    if ((!mediaUrl && (!Number.isInteger(size) || size < 1 || size > 50_000_000)) || !modes.includes(mode)) {
       return res.status(400).json({ error: "Chọn file tối đa 50 MB và một chế độ đang mở." });
     }
     const origins = ["https://akapella.vercel.app", ...[deployment, branch].filter(Boolean).map(host => `https://${host}`)];
@@ -58,7 +71,7 @@ export default async function handler(req, res) {
       name = `akapella-${digest}`;
     }
     try {
-      return res.status(200).json(await createSandboxJob(snapshot, size, mode, origin, name, region));
+      return res.status(200).json(await createSandboxJob(snapshot, size ?? 0, mode, origin, name, region, mediaUrl));
     } catch (error) {
       const status = error.response?.status ?? error.status;
       const conflict = status === 400 && error.json?.error?.message?.includes(`with the name '${name}' already exists`);
