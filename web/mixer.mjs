@@ -4,12 +4,24 @@ export function createMixer(onUpdate) {
   let stems = new Map();
   let nodes = [];
   let muted = new Set();
+  let volumes = new Map();
   let solo;
   let mode = "original";
   let offset = 0;
   let started = 0;
   let playing = false;
   let frame;
+  let analyser;
+
+  function output() {
+    if (!analyser) {
+      analyser = context.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = .8;
+      analyser.connect(context.destination);
+    }
+    return analyser;
+  }
 
   function position() {
     const elapsed = playing ? Math.max(0, context.currentTime - started) : 0;
@@ -17,7 +29,7 @@ export function createMixer(onUpdate) {
   }
 
   function update(progressOnly = false) {
-    onUpdate({ position: position(), playing, mode, muted, solo, hasStems: stems.size > 0 }, progressOnly);
+    onUpdate({ position: position(), playing, mode, muted, solo, volumes, hasStems: stems.size > 0 }, progressOnly);
   }
 
   function stop() {
@@ -35,7 +47,7 @@ export function createMixer(onUpdate) {
     if (mode === "original") return name === "original" ? 1 : 0;
     if (name === "original") return 0;
     if (mode === "instrumental") return name === "vocals" ? 0 : 0.9;
-    return (solo ? solo === name : !muted.has(name)) ? 0.9 : 0;
+    return (solo ? solo === name : !muted.has(name)) ? 0.9 * (volumes.get(name) ?? 1) : 0;
   }
 
   function start() {
@@ -46,7 +58,7 @@ export function createMixer(onUpdate) {
       const gain = context.createGain();
       source.buffer = buffer;
       gain.gain.value = level(name);
-      source.connect(gain).connect(context.destination);
+      source.connect(gain).connect(output());
       source.start(started, offset);
       nodes.push({ name, source, gain });
     }
@@ -72,11 +84,18 @@ export function createMixer(onUpdate) {
   }
 
   return {
+    // Fills a 64-bin byte spectrum of what is playing; false when silent.
+    spectrum(target) {
+      if (!playing || !analyser) return false;
+      analyser.getByteFrequencyData(target);
+      return true;
+    },
     setTrack(buffer) {
       stop();
       original = buffer;
       stems.clear();
       muted.clear();
+      volumes.clear();
       solo = undefined;
       offset = 0;
       mode = "original";
@@ -88,6 +107,7 @@ export function createMixer(onUpdate) {
       stop();
       stems = buffers;
       muted = new Set();
+      volumes = new Map();
       solo = undefined;
       mode = "original";
       if (resume && offset < original.duration) start();
@@ -128,6 +148,13 @@ export function createMixer(onUpdate) {
         muted.add(name);
         if (solo === name) solo = undefined;
       }
+      mode = "mix";
+      refreshMix();
+    },
+    // Per-stem level from 0 to 1; 0 behaves like mute without losing the solo state.
+    volume(name, value) {
+      if (!stems.has(name)) return;
+      volumes.set(name, Math.max(0, Math.min(1, value)));
       mode = "mix";
       refreshMix();
     },

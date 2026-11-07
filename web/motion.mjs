@@ -3,13 +3,10 @@ import { animate, createDrawable, createTimeline, stagger } from "./vendor/anime
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const waveElement = document.querySelector("[data-wave]");
 const hero = document.querySelector(".hero");
-const rippleMap = document.getElementById("ripple-map");
-const restingRipple = Number(rippleMap.getAttribute("scale"));
 let entrance;
 let results;
 let mode;
 let youtubeIntro;
-let ripple;
 
 // Content must never stay hidden: if frames stop (background tab, throttled
 // pane), finish the entrance on a timer instead of waiting for rAF.
@@ -18,35 +15,20 @@ function settle(animation, ms) {
   return animation;
 }
 
-function rippleTo(scale, duration, from) {
-  ripple?.pause();
-  const state = { scale: from ?? Number(rippleMap.getAttribute("scale")) };
-  ripple = animate(state, {
-    scale, duration, ease: "out(3)",
-    onUpdate: () => rippleMap.setAttribute("scale", state.scale.toFixed(1)),
-  });
-}
-
-export function revealHero() {
+export function revealHero(first = false) {
   entrance?.revert();
   if (reduceMotion.matches) return;
-  const loaded = hero.closest("[data-loaded]");
   entrance = createTimeline({ defaults: { ease: "out(4)" } })
-    .add(hero.querySelectorAll("#headline .line > span, .echo .line > span"), {
-      opacity: [0, 1], y: ["0.42em", "0em"], duration: 760, delay: stagger(90, { grid: [2, 2], axis: "x" }),
+    .add(hero.querySelectorAll("#headline .line > span"), {
+      opacity: [0, 1], y: ["0.45em", "0em"], filter: ["blur(10px)", "blur(0px)"], duration: 760, delay: stagger(90),
     }, 0)
-    .add(hero.querySelector(".eyebrow"), { opacity: [0, 1], x: [-12, 0], duration: 520 }, 0)
-    .add(hero.querySelectorAll(".hero-copy [data-hero]"), {
-      opacity: [0, 1], y: [18, 0], duration: 560, delay: stagger(70),
-    }, loaded ? 80 : 260)
-    .add(hero.querySelector(".portal"), { opacity: [0.55, 1], scale: [1.06, 1], duration: 1300, ease: "out(3)" }, 0);
-  settle(entrance, 1800);
-  if (!loaded) rippleTo(restingRipple, 1600, 70);
-}
-
-export function rippleDrag(active) {
-  if (reduceMotion.matches) return;
-  rippleTo(active ? 46 : restingRipple, active ? 500 : 900);
+    .add(hero.querySelectorAll(".eyebrow, .intro"), { opacity: [0, 1], y: [10, 0], duration: 520, delay: stagger(60) }, 80);
+  if (first) {
+    entrance
+      .add(hero.querySelector(".upload"), { opacity: [0, 1], y: [24, 0], duration: 760 }, 180)
+      .add(hero.querySelector(".app"), { opacity: [0, 1], y: [70, 0], scale: [.96, 1], duration: 1100, ease: "out(5)" }, 300);
+  }
+  settle(entrance, 1900);
 }
 
 export function revealWave() {
@@ -60,7 +42,7 @@ export function revealYoutube(element) {
   youtubeIntro?.revert();
   if (reduceMotion.matches) return;
   youtubeIntro = settle(animate(element.querySelectorAll(".youtube-intro > *, .youtube-body"), {
-    opacity: [0, 1], y: [24, 0], duration: 620, delay: stagger(80), ease: "out(4)",
+    opacity: [0, 1], y: [20, 0], duration: 600, delay: stagger(70), ease: "out(4)",
   }), 1400);
 }
 
@@ -68,7 +50,7 @@ export function revealResults(elements) {
   resetResultsMotion();
   if (reduceMotion.matches) return;
   results = settle(animate(elements, {
-    opacity: [0, 1], x: [-16, 0], duration: 520, delay: stagger(70, { start: 120 }), ease: "out(4)",
+    opacity: [0, 1], x: [-14, 0], duration: 520, delay: stagger(70, { start: 120 }), ease: "out(4)",
   }), 1600);
 }
 
@@ -91,15 +73,13 @@ function resetWave() {
 
 function resetMotion() {
   entrance?.revert();
-  ripple?.pause();
-  rippleMap.setAttribute("scale", restingRipple);
   resetWave();
   youtubeIntro?.revert();
   mode?.revert();
   resetResultsMotion();
 }
 
-if (!hero.closest("[hidden]")) revealHero();
+if (!hero.closest("[hidden]")) revealHero(true);
 requestAnimationFrame(() => document.documentElement.classList.remove("motion-pending"));
 reduceMotion.addEventListener("change", ({ matches }) => { if (matches) resetMotion(); });
 addEventListener("pagehide", resetMotion);

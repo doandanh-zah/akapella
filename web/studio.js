@@ -1,5 +1,6 @@
 import { cloudAvailable, splitInCloud } from "./cloud.mjs";
 import { createMixer, waveform } from "./mixer.mjs";
+import { createField, envelope, shape } from "./field.mjs";
 
 const motion = import("./motion.mjs").catch(() => null);
 const byId = (id) => document.getElementById(id);
@@ -57,11 +58,59 @@ const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const svgNS = "http://www.w3.org/2000/svg";
 const toolLinks = [...document.querySelectorAll("[data-view]")];
 const views = {
-  vocals: ["01 / TÁCH ÂM THANH", "Tách giọng|khỏi bản nhạc.", "Lấy giọng hát và bản không lời thành hai track riêng để nghe, phối lại hoặc hát karaoke."],
-  multitrack: ["02 / TÁCH NHIỀU STEM", "Tách từng lớp|âm thanh.", "Tách giọng, bass, trống và các nhạc cụ. Nghe và tải WAV riêng cho từng track."],
-  tempo: ["03 / PHÂN TÍCH NHẠC", "Tìm BPM|và tone.", "Mở một bài để ước tính nhịp độ và giọng trưởng hoặc thứ ngay trên thiết bị."],
+  vocals: ["Tách âm thanh", "Tách giọng|khỏi bản nhạc.", "Lấy giọng hát và bản không lời thành hai track riêng để nghe, phối lại hoặc hát karaoke."],
+  multitrack: ["Tách nhiều stem", "Tách từng lớp|âm thanh.", "Tách giọng, bass, trống và các nhạc cụ. Nghe và tải WAV riêng cho từng track."],
+  tempo: ["Phân tích nhạc", "Tìm BPM|và tone.", "Mở một bài để ước tính nhịp độ và giọng trưởng hoặc thứ ngay trên thiết bị."],
 };
 const mixer = createMixer(renderMixer);
+// Read stem colours inside the dark product window, which has its own glowing palette.
+const css = getComputedStyle(byId("field"));
+const stemColor = (name) => {
+  const hex = css.getPropertyValue(`--${name}`).trim().replace("#", "") || "ffffff";
+  return [0, 2, 4].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255);
+};
+const palettes = {
+  vocals: ["vocals", "instrumental"].map(stemColor),
+  multitrack: ["vocals", "bass", "drums", "other"].map(stemColor),
+};
+let fieldStems = [];
+let songShape = null;
+let lanesKey = "";
+const idleLanes = {
+  vocals: ["vocals", "instrumental"],
+  multitrack: ["vocals", "bass", "drums", "other"],
+};
+const laneLabels = { ...labels, instrumental: "Nhạc nền", other: "Nhạc khác" };
+
+// Name each band of the field, positioned where the shader centres it.
+function syncLanes() {
+  const lanes = byId("lanes");
+  const names = !field ? [] : fieldStems.length ? fieldStems : audio ? ["original"] : idleLanes[view] ?? [];
+  const key = names.join();
+  if (key === lanesKey) return;
+  lanesKey = key;
+  lanes.replaceChildren(...names.map((name, index) => {
+    const item = document.createElement("li");
+    item.textContent = name === "original" ? "Bản gốc" : laneLabels[name];
+    item.style.setProperty("--y", `${9 + (index + .5) * 82 / names.length}%`);
+    item.style.setProperty("--c", name === "original" ? "#fff" : `rgb(${stemColor(name).map((v) => Math.round(v * 255)).join(" ")})`);
+    item.style.setProperty("--i", index);
+    return item;
+  }));
+}
+
+function syncAppTitle() {
+  const titles = { vocals: "tách giọng", multitrack: "tách nhiều stem", tempo: "bpm & tone" };
+  byId("app-title").textContent = audio ? byId("song-name").textContent : `akapella — ${titles[view] ?? ""}`;
+}
+let field = null;
+try {
+  field = createField(byId("field"), { reduceMotion });
+} catch {
+  field = null;
+}
+if (field) field.listen((bins) => mixer.spectrum(bins));
+else byId("field").hidden = true;
 const cloudConfig = cloudAvailable().then((config) => {
   useCloud = config?.enabled === true;
   cloudUnavailable = config === null;
@@ -91,10 +140,12 @@ function syncView() {
     const [line, nextLine] = heading.split("|");
     byId("tool-kicker").textContent = kicker;
     setHeadline(byId("headline"), [line, nextLine]);
-    setHeadline(byId("headline-echo"), [line, nextLine]);
     byId("tool-intro").textContent = intro;
   }
   syncWorkspace();
+  field?.setMode(view, palettes[view] ?? []);
+  syncLanes();
+  syncAppTitle();
   if (previous !== view) {
     void motion.then((effects) => {
       if (view !== workspace.dataset.view) return;
@@ -203,12 +254,23 @@ function setPressed(button, active) {
   if (button.getAttribute("aria-pressed") !== String(active)) button.setAttribute("aria-pressed", active);
 }
 
+function stemLevels(state) {
+  return fieldStems.map((name) => {
+    if (state.mode === "original") return 1;
+    if (state.mode === "instrumental") return name === "vocals" ? .18 : 1;
+    const volume = state.volumes?.get(name) ?? 1;
+    return (state.solo ? state.solo === name : !state.muted.has(name)) ? .15 + .85 * volume : .15;
+  });
+}
+
 function renderMixer(state, progressOnly) {
   if (!scrubbing) {
     seek.value = state.position;
     showPosition(state.position);
   }
+  field?.setPlayhead(state.playing && audio ? state.position / audio.duration : null);
   if (progressOnly) return;
+  if (fieldStems.length) field?.setLevels(stemLevels(state));
   lastMixerState = state;
   const label = state.playing ? "Tạm dừng" : "Phát";
   if (byId("play-label").textContent !== label) {
@@ -221,8 +283,13 @@ function renderMixer(state, progressOnly) {
   for (const [name, buttons] of rowButtons) {
     if (buttons.listen) setPressed(buttons.listen, state.mode === "instrumental");
     else {
-      setPressed(buttons.mute, state.muted.has(name));
+      const volume = state.volumes?.get(name) ?? 1;
+      if (document.activeElement !== buttons.volume) buttons.volume.value = volume;
+      buttons.volume.style.setProperty("--v", volume);
+      buttons.volume.setAttribute("aria-valuetext", `${Math.round(volume * 100)}%`);
       setPressed(buttons.solo, state.solo === name);
+      const row = buttons.solo.closest(".track");
+      row.toggleAttribute("data-silent", state.mode === "mix" && (volume === 0 || state.muted.has(name) || Boolean(state.solo && state.solo !== name)));
     }
   }
 }
@@ -267,7 +334,7 @@ async function select(file) {
   clearAnalysis();
   syncWorkspace();
   byId("song-name").textContent = "Đang đọc file…";
-  byId("wave-source").textContent = "ĐANG ĐỌC FILE";
+  byId("wave-source").textContent = "Đang đọc file";
   wave.removeAttribute("data-loaded");
   wave.setAttribute("d", sampleWave);
   play.disabled = seek.disabled = monitorOriginal.disabled = run.disabled = true;
@@ -288,7 +355,12 @@ async function select(file) {
       if (opening) scrollTo({ top: 0 });
       byId("song-name").textContent = file.name;
       byId("duration").textContent = formatTime(audio.duration);
-      byId("wave-source").textContent = "BÀI ĐANG MỞ";
+      byId("wave-source").textContent = `Bài đang mở · ${formatTime(audio.duration)}`;
+      fieldStems = [];
+      songShape = shape(envelope(audio));
+      field?.setSong(songShape);
+      syncLanes();
+      syncAppTitle();
       wave.removeAttribute("data-placeholder");
       for (const attr of ["stroke-dasharray", "stroke-dashoffset", "pathLength"]) wave.removeAttribute(attr);
       wave.setAttribute("data-loaded", "");
@@ -312,7 +384,12 @@ async function select(file) {
   } catch (error) {
     if (selection !== current) return;
     byId("song-name").textContent = "Chưa chọn bài";
-    byId("wave-source").textContent = "BÀI MẪU";
+    byId("wave-source").textContent = "Bài mẫu · 12 giây";
+    fieldStems = [];
+    field?.setSong(null);
+    field?.setMode(view, palettes[view] ?? []);
+    syncLanes();
+    syncAppTitle();
     status.textContent = "";
     if (!file.sample) {
       source.setAttribute("aria-invalid", "true");
@@ -330,7 +407,7 @@ source.addEventListener("change", () => {
 function setDragging(active) {
   if (drop.classList.contains("dragging") === active) return;
   drop.classList.toggle("dragging", active);
-  void motion.then((effects) => effects?.rippleDrag(active));
+  field?.surge(active);
 }
 drop.addEventListener("dragover", (event) => {
   event.preventDefault();
@@ -384,6 +461,11 @@ function reportProgress(step, message, detail = "", done, total) {
   } else {
     progress.removeAttribute("value");
   }
+  // One sweep across the whole job: each of the three steps fills a third and
+  // the front never moves backward when a step has no measurable total.
+  const share = total ? Math.min(1, done / total) : .12;
+  job.field = Math.max(job.field ?? 0, (step - 1 + share) / 3);
+  field?.setProgress(job.field);
 }
 
 function tickJob() {
@@ -397,6 +479,7 @@ function tickJob() {
 
 function finish(message, state = "") {
   clearInterval(job?.timer);
+  field?.setProgress(null);
   job = undefined;
   controls.disabled = false;
   syncWorkspace();
@@ -501,19 +584,35 @@ function showResults(files, buffers) {
     title.textContent = label;
     const actions = document.createElement("div");
     actions.className = "track-actions";
-    if (name === "instrumental") {
+    let volume;
+    // In 2-track mode the instrumental is a real mixer lane; with more stems it is a karaoke shortcut.
+    if (name === "instrumental" && files.size > 2) {
       const listen = trackButton("Nghe", "Nghe bản không lời", () => {
         mixer.monitor(lastMixerState.mode === "instrumental" ? "original" : "instrumental");
       }, "solo");
       rowButtons.set(name, { listen });
       actions.append(listen);
+      volume = document.createElement("span");
+      volume.className = "volume volume-empty";
     } else {
-      const mute = trackButton("Mute", `Mute · ${label}`, () => mixer.mute(name), "mute");
+      volume = document.createElement("input");
+      volume.type = "range";
+      volume.className = "volume";
+      volume.min = "0";
+      volume.max = "1";
+      volume.step = "0.01";
+      volume.value = "1";
+      volume.setAttribute("aria-label", `Âm lượng · ${label}`);
+      volume.addEventListener("input", () => {
+        volume.style.setProperty("--v", volume.value);
+        mixer.volume(name, Number(volume.value));
+      });
       const solo = trackButton("Solo", `Solo · ${label}`, () => mixer.solo(name), "solo");
-      rowButtons.set(name, { mute, solo });
-      actions.append(mute, solo);
+      rowButtons.set(name, { volume, solo });
+      actions.append(solo);
     }
     for (const button of actions.children) button.disabled = !buffers.size;
+    if (volume.tagName === "INPUT") volume.disabled = !buffers.size;
     const link = document.createElement("a");
     link.href = url;
     link.referrerPolicy = "no-referrer";
@@ -539,7 +638,7 @@ function showResults(files, buffers) {
     flat.setAttribute("vector-effect", "non-scaling-stroke");
     svg.append(flat, document.createElementNS(svgNS, "path"));
     trace.append(svg);
-    item.append(index, title, trace, actions);
+    item.append(index, title, volume, trace, actions);
     results.append(item);
   }
   mixer.setStems(buffers);
@@ -562,6 +661,17 @@ function drawStemWaves(buffers) {
     trace.querySelector("line").remove();
     trace.setAttribute("data-ready", "");
   }
+}
+
+function showStemField(buffers) {
+  if (!field) return;
+  const order = ["vocals", "bass", "drums", "guitar", "piano", "other", "instrumental"];
+  fieldStems = order.filter((name) => buffers.has(name));
+  const values = fieldStems.map((name) => envelope(buffers.get(name)));
+  const peak = Math.max(1e-4, ...values.flatMap((row) => [...row]));
+  field.setStems(fieldStems.map((name, index) => ({ color: stemColor(name), values: shape(values[index], peak) })),
+    lastMixerState ? stemLevels(lastMixerState) : []);
+  syncLanes();
 }
 
 function clearAnalysis() {
@@ -647,6 +757,7 @@ async function prepareResults(files, mixTracks, readWav, current) {
       }
       mixer.setStems(buffers);
       drawStemWaves(buffers);
+      showStemField(buffers);
     }
     const message = buffers.size
       ? "Chọn Bản tách hoặc Solo để nghe."
@@ -720,6 +831,12 @@ form.addEventListener("submit", (event) => {
   jobElapsed.textContent = "0:00";
   form.setAttribute("aria-busy", "true");
   showError();
+  if (fieldStems.length) {
+    // Fold the old stems back into the song before the new split sweeps across it.
+    fieldStems = [];
+    field?.setSong(songShape);
+    syncLanes();
+  }
   if (current.cloud) {
     reportProgress(1, "Đang mở máy chủ…");
     void runCloud(current, splitMode, selection.file);
